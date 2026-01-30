@@ -25,6 +25,19 @@
 				--text-muted: #666;
 				--accent: #2a9d0a;
 				--border: #d0d0d0;
+				--border-light: rgba(208, 208, 208, 0.3);
+			}
+
+			@media (prefers-color-scheme: dark) {
+				:root {
+					--bg: #1a1a1a;
+					--grid: #2a2a2a;
+					--text: #fafafa;
+					--text-muted: #999;
+					--accent: #44cc11;
+					--border: #444;
+					--border-light: rgba(68, 68, 68, 0.3);
+				}
 			}
 
 			body {
@@ -55,7 +68,7 @@
 				position: absolute;
 				width: 1px;
 				height: 100vh;
-				background: rgba(208, 208, 208, 0.3);
+				background: var(--border-light);
 				pointer-events: none;
 				top: 50%;
 				transform: translateY(-50%);
@@ -100,27 +113,27 @@
 				left: 0;
 				right: 0;
 				height: 1px;
-				background: var(--border);
+				background: var(--border-light);
 			}
 
 			.usage::before {
 				top: 0;
 				transform: translateY(0);
-				box-shadow: 0 0 0 100vw var(--border);
+				box-shadow: 0 0 0 100vw var(--border-light);
 				clip-path: inset(0 -100vw 0 -100vw);
 			}
 
 			.usage::after {
 				bottom: 0;
 				transform: translateY(0);
-				box-shadow: 0 0 0 100vw var(--border);
+				box-shadow: 0 0 0 100vw var(--border-light);
 				clip-path: inset(0 -100vw 0 -100vw);
 			}
 
 			.usage pre {
 				margin: 0;
 				padding: 0.5rem 0;
-				border-bottom: 1px dotted var(--border);
+				border-bottom: 1px dotted var(--border-light);
 			}
 
 			.usage pre:last-child {
@@ -139,42 +152,60 @@
 				margin-bottom: 1rem;
 			}
 
-			.markdown-example {
+			.url-example {
 				padding: 0.75rem 1rem;
-				text-align: left;
+				text-align: center;
 				margin-bottom: 1rem;
 				background: var(--bg);
 				position: relative;
 			}
 
-			.markdown-example::before,
-			.markdown-example::after {
+			.url-example::before,
+			.url-example::after {
 				content: '';
 				position: absolute;
 				left: 0;
 				right: 0;
 				height: 1px;
-				background: var(--border);
+				background: var(--border-light);
 			}
 
-			.markdown-example::before {
+			.url-example::before {
 				top: 0;
 				transform: translateY(0);
-				box-shadow: 0 0 0 100vw var(--border);
+				box-shadow: 0 0 0 100vw var(--border-light);
 				clip-path: inset(0 -100vw 0 -100vw);
 			}
 
-			.markdown-example::after {
+			.url-example::after {
 				bottom: 0;
 				transform: translateY(0);
-				box-shadow: 0 0 0 100vw var(--border);
+				box-shadow: 0 0 0 100vw var(--border-light);
 				clip-path: inset(0 -100vw 0 -100vw);
 			}
 
-			.markdown-example input {
-				width: 100%;
-				margin: 0 0 0.75rem 0;
-				padding: 0.75rem 1rem;
+			.input-wrapper {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 0.5rem;
+				margin-bottom: 0.75rem;
+				font-family: 'Cascadia Code', monospace;
+				font-size: 0.75rem;
+			}
+
+			.input-group {
+				display: flex;
+				align-items: center;
+				gap: 0.25rem;
+			}
+
+			.input-prefix {
+				color: var(--text-muted);
+			}
+
+			.url-example input {
+				padding: 0.5rem 0.75rem;
 				font-family: 'Cascadia Code', monospace;
 				font-size: 0.75rem;
 				color: var(--text);
@@ -183,15 +214,37 @@
 				border-radius: 4px;
 				outline: none;
 				text-align: center;
+				min-width: 120px;
 			}
 
-			.markdown-example input:focus {
+			.url-example input:focus {
 				border-color: var(--accent);
+			}
+
+			.copy-button {
+				padding: 0.5rem 0.75rem;
+				font-family: 'Cascadia Code', monospace;
+				font-size: 0.75rem;
+				color: var(--text);
+				background: var(--bg);
+				border: 1px solid var(--border);
+				border-radius: 4px;
+				cursor: pointer;
+				transition: all 0.2s;
+			}
+
+			.copy-button:hover {
+				border-color: var(--accent);
+				color: var(--accent);
+			}
+
+			.copy-button:active {
+				transform: scale(0.95);
 			}
 
 			.live-preview {
 				padding-top: 0.75rem;
-				border-top: 1px dotted var(--border);
+				border-top: 1px dotted var(--border-light);
 			}
 
 			.live-preview img {
@@ -202,8 +255,13 @@
 	</head>
 	<body>
 		<main>
-			<h1>bulk</h1>
+			<h1>✜ bulk</h1>
 			<p class="tagline">Package size badges</p>
+
+			<p class="tagline">
+				Shows the actual CDN bundle size - the initial load size when using CDN imports. If the CDN points to a bundle, this is the
+				total bundle size. Unlike bundlephobia which shows minified+gzipped npm package sizes.
+			</p>
 
 			<div class="usage">
 				<pre><code>/:package</code></pre>
@@ -212,22 +270,54 @@
 
 			<div class="providers">providers: jsdelivr, unpkg, skypack, esm.sh</div>
 
-			<div class="markdown-example">
-				<input type="text" id="markdown-code" value="![bulk](https://example.com/react)" readonly />
+			<div class="url-example">
+				<div class="input-wrapper">
+					<div class="input-group">
+						<span class="input-prefix">https://bulk.frustrated.dev/</span>
+						<input type="text" id="package-input" value="zustand" />
+					</div>
+					<button class="copy-button" id="copy-button">copy</button>
+				</div>
 				<div class="live-preview">
-					<img id="badge-preview" src="/react" alt="bulk" />
+					<img id="badge-preview" src="/zustand" alt="jsdelivr size" />
 				</div>
 			</div>
 		</main>
 		<script>
 			const domain = window.location.origin;
-			const input = document.getElementById('markdown-code');
-			input.value = `![jsdelivr size](${domain}/react)`;
-			document.getElementById('badge-preview').src = `${domain}/react`;
-			document.getElementById('badge-preview').alt = 'jsdelivr size';
+			const input = document.getElementById('package-input');
+			const preview = document.getElementById('badge-preview');
+			const prefix = document.querySelector('.input-prefix');
+			const copyButton = document.getElementById('copy-button');
 
+			// Update prefix with actual domain
+			prefix.textContent = `${domain}/`;
+
+			// Update preview when input changes
+			input.addEventListener('input', function () {
+				const pkg = this.value.trim() || 'zustand';
+				preview.src = `${domain}/${pkg}`;
+			});
+
+			// Select all on click
 			input.addEventListener('click', function () {
 				this.select();
+			});
+
+			// Copy URL to clipboard
+			copyButton.addEventListener('click', async function () {
+				const pkg = input.value.trim() || 'zustand';
+				const url = `${domain}/${pkg}`;
+
+				try {
+					await navigator.clipboard.writeText(url);
+					copyButton.textContent = 'copied!';
+					setTimeout(() => {
+						copyButton.textContent = 'copy';
+					}, 2000);
+				} catch (err) {
+					console.error('Failed to copy:', err);
+				}
 			});
 		</script>
 	</body>
