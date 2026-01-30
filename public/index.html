@@ -3,29 +3,231 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Hello, World!</title>
+		<title>bulk</title>
+		<link
+			rel="icon"
+			href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✜</text></svg>"
+		/>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap" rel="stylesheet" />
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
+			:root {
+				--bg: #fafafa;
+				--grid: #e8e8e8;
+				--text: #1a1a1a;
+				--text-muted: #666;
+				--accent: #2a9d0a;
+				--border: #d0d0d0;
+			}
+
+			body {
+				font-family: 'Cascadia Code', monospace;
+				font-optical-sizing: auto;
+				font-weight: 400;
+				background-color: var(--bg);
+				color: var(--text);
+				min-height: 100vh;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				line-height: 1.6;
+				overflow-x: hidden;
+			}
+
+			main {
+				width: 100%;
+				max-width: 560px;
+				padding: 1rem;
+				text-align: center;
+				position: relative;
+			}
+
+			main::before,
+			main::after {
+				content: '';
+				position: absolute;
+				width: 1px;
+				height: 100vh;
+				background: rgba(208, 208, 208, 0.3);
+				pointer-events: none;
+				top: 50%;
+				transform: translateY(-50%);
+			}
+
+			main::before {
+				left: 0;
+			}
+
+			main::after {
+				right: 0;
+			}
+
+			h1 {
+				font-size: 3rem;
+				font-weight: 400;
+				letter-spacing: -0.02em;
+				margin-bottom: 0.25rem;
+				color: var(--text);
+			}
+
+			p.tagline {
+				font-size: 0.875rem;
+				color: var(--text-muted);
+				margin-bottom: 1.5rem;
+				text-transform: none;
+				letter-spacing: 0;
+			}
+
+			.usage {
+				padding: 0.75rem 1rem;
+				text-align: left;
+				margin-bottom: 1rem;
+				background: var(--bg);
+				position: relative;
+			}
+
+			.usage::before,
+			.usage::after {
+				content: '';
+				position: absolute;
+				left: 0;
+				right: 0;
+				height: 1px;
+				background: var(--border);
+			}
+
+			.usage::before {
+				top: 0;
+				transform: translateY(0);
+				box-shadow: 0 0 0 100vw var(--border);
+				clip-path: inset(0 -100vw 0 -100vw);
+			}
+
+			.usage::after {
+				bottom: 0;
+				transform: translateY(0);
+				box-shadow: 0 0 0 100vw var(--border);
+				clip-path: inset(0 -100vw 0 -100vw);
+			}
+
+			.usage pre {
+				margin: 0;
+				padding: 0.5rem 0;
+				border-bottom: 1px dotted var(--border);
+			}
+
+			.usage pre:last-child {
+				border-bottom: none;
+			}
+
+			.usage code {
+				font-family: 'Cascadia Code', monospace;
+				font-size: 0.875rem;
+				color: var(--accent);
+			}
+
+			.providers {
+				font-size: 0.8125rem;
+				color: var(--text-muted);
+				margin-bottom: 1rem;
+			}
+
+			.markdown-example {
+				padding: 0.75rem 1rem;
+				text-align: left;
+				margin-bottom: 1rem;
+				background: var(--bg);
+				position: relative;
+			}
+
+			.markdown-example::before,
+			.markdown-example::after {
+				content: '';
+				position: absolute;
+				left: 0;
+				right: 0;
+				height: 1px;
+				background: var(--border);
+			}
+
+			.markdown-example::before {
+				top: 0;
+				transform: translateY(0);
+				box-shadow: 0 0 0 100vw var(--border);
+				clip-path: inset(0 -100vw 0 -100vw);
+			}
+
+			.markdown-example::after {
+				bottom: 0;
+				transform: translateY(0);
+				box-shadow: 0 0 0 100vw var(--border);
+				clip-path: inset(0 -100vw 0 -100vw);
+			}
+
+			.markdown-example input {
+				width: 100%;
+				margin: 0 0 0.75rem 0;
+				padding: 0.75rem 1rem;
+				font-family: 'Cascadia Code', monospace;
+				font-size: 0.75rem;
+				color: var(--text);
+				background: var(--bg);
+				border: 1px solid var(--border);
+				border-radius: 4px;
+				outline: none;
+				text-align: center;
+			}
+
+			.markdown-example input:focus {
+				border-color: var(--accent);
+			}
+
+			.live-preview {
+				padding-top: 0.75rem;
+				border-top: 1px dotted var(--border);
+			}
+
+			.live-preview img {
+				max-width: 100%;
+				height: auto;
+			}
+		</style>
 	</head>
 	<body>
-		<h1 id="heading"></h1>
-		<p>This page comes from a static asset stored at `public/index.html` as configured in `wrangler.jsonc`.</p>
-		<button id="button" type="button">Fetch a random UUID</button>
-		<output id="random" for="button"></output>
-		<script>
-			fetch('/message')
-				.then((resp) => resp.text())
-				.then((text) => {
-					const h1 = document.getElementById('heading');
-					h1.textContent = text;
-				});
+		<main>
+			<h1>bulk</h1>
+			<p class="tagline">Package size badges</p>
 
-			const button = document.getElementById("button");
-			button.addEventListener("click", () => {
-				fetch('/random')
-					.then((resp) => resp.text())
-					.then((text) => {
-						const random = document.getElementById('random');
-						random.textContent = text;
-					});
+			<div class="usage">
+				<pre><code>/:package</code></pre>
+				<pre><code>/:provider/:package</code></pre>
+			</div>
+
+			<div class="providers">providers: jsdelivr, unpkg, skypack, esm.sh</div>
+
+			<div class="markdown-example">
+				<input type="text" id="markdown-code" value="![bulk](https://example.com/react)" readonly />
+				<div class="live-preview">
+					<img id="badge-preview" src="/react" alt="bulk" />
+				</div>
+			</div>
+		</main>
+		<script>
+			const domain = window.location.origin;
+			const input = document.getElementById('markdown-code');
+			input.value = `![jsdelivr size](${domain}/react)`;
+			document.getElementById('badge-preview').src = `${domain}/react`;
+			document.getElementById('badge-preview').alt = 'jsdelivr size';
+
+			input.addEventListener('click', function () {
+				this.select();
 			});
 		</script>
 	</body>
