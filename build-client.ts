@@ -1,27 +1,31 @@
-import { cpSync } from 'fs';
+import { cpSync, mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
+import { SolidPlugin } from '@dschz/bun-plugin-solid';
 
 const clientDir = join(import.meta.dir, 'src', 'client');
 const outDir = join(import.meta.dir, 'public');
 
-// Bundle the TypeScript entry point
-const result = await Bun.build({
-	entrypoints: [join(clientDir, 'main.ts')],
+if (existsSync(outDir)) {
+	rmSync(outDir, { recursive: true });
+}
+mkdirSync(outDir, { recursive: true });
+
+const buildResult = await Bun.build({
+	entrypoints: [join(clientDir, 'main.tsx')],
 	outdir: outDir,
 	minify: true,
 	target: 'browser',
+	plugins: [SolidPlugin()],
 });
 
-if (!result.success) {
+if (!buildResult.success) {
 	console.error('Build failed:');
-	for (const log of result.logs) {
+	for (const log of buildResult.logs) {
 		console.error(log);
 	}
 	process.exit(1);
 }
 
-// Copy static assets
 cpSync(join(clientDir, 'index.html'), join(outDir, 'index.html'));
-cpSync(join(clientDir, 'style.css'), join(outDir, 'style.css'));
 
 console.log('Client build complete.');

@@ -1,0 +1,25 @@
+h1 {
+	font-size: var(--font-size-heading);
+	font-weight: 400;
+	letter-spacing: -0.02em;
+	margin-bottom: var(--spacing-heading-bottom);
+	color: var(--color-text);
+}
+
+p.tagline {
+	font-size: var(--font-size-tagline);
+	color: var(--color-text-muted);
+	margin-bottom: var(--spacing-tagline-bottom);
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+@media (max-width: 480px) {
+	h1 {
+		font-size: var(--font-size-heading-mobile);
+	}
+
+	p.tagline {
+		font-size: var(--font-size-tagline-mobile);
+	}
+}

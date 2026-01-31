@@ -1,294 +1,219 @@
-* {
-	margin: 0;
-	padding: 0;
+/* ============================================
+   COMPONENT STYLES
+   ============================================ */
+
+@import './components/Header.css';
+@import './components/UsageInfo.css';
+@import './components/BadgeGenerator.css';
+
+/* ============================================
+   MODERN CSS RESET
+   Josh's Custom CSS Reset
+   https://www.joshwcomeau.com/css/custom-css-reset/
+   ============================================ */
+
+*,
+*::before,
+*::after {
 	box-sizing: border-box;
 }
 
+*:not(dialog) {
+	margin: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	html {
+		interpolate-size: allow-keywords;
+	}
+}
+
+body {
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+	display: block;
+	max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+	font: inherit;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	overflow-wrap: break-word;
+}
+
+p {
+	text-wrap: pretty;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	text-wrap: balance;
+}
+
+#root,
+#__next {
+	isolation: isolate;
+}
+
+/* ============================================
+   DESIGN TOKENS
+   ============================================ */
+
 :root {
-	--bg: #fafafa;
-	--grid: #e8e8e8;
-	--text: #1a1a1a;
-	--text-muted: #666;
-	--accent: #2a9d0a;
-	--border: #d0d0d0;
-	--border-light: rgba(208, 208, 208, 0.3);
+	/* Colors */
+	--color-bg: #fafafa;
+	--color-grid: #e8e8e8;
+	--color-text: #1a1a1a;
+	--color-text-muted: #666;
+	--color-accent: #2a9d0a;
+	--color-border: #d0d0d0;
+	--color-border-light: rgba(208, 208, 208, 0.3);
+
+	/* Spacing — layout */
+	--spacing-page-padding: 1.5rem;
+	--spacing-main-block: 2rem 1rem;
+	--spacing-section-block: 0.75rem 1rem;
+	--spacing-section-gap: 1rem;
+	--spacing-hero-block: 1.5rem 1rem;
+	--spacing-hero-inline-offset: -1rem;
+
+	/* Spacing — content */
+	--spacing-heading-bottom: 0.25rem;
+	--spacing-tagline-bottom: 1.5rem;
+	--spacing-code-block: 0.5rem 0;
+	--spacing-label-bottom: 0.5rem;
+	--spacing-preview-top: 0.75rem;
+
+	/* Spacing — form controls */
+	--spacing-input-inline: 0.75rem;
+	--spacing-input-block: 0.625rem;
+	--spacing-input-block-mobile: 0.625rem;
+	--spacing-input-inline-mobile: 0.625rem;
+	--spacing-button-inline: 1rem;
+	--spacing-button-block: 0.625rem;
+	--spacing-button-inline-mobile: 0.875rem;
+	--spacing-button-block-mobile: 0.625rem;
+
+	/* Font sizes */
+	--font-size-heading: 3rem;
+	--font-size-tagline: 0.875rem;
+	--font-size-code: 0.875rem;
+	--font-size-label: 0.75rem;
+	--font-size-input: 0.75rem;
+	--font-size-button: 0.75rem;
+	--font-size-providers: 0.8125rem;
+
+	/* Font sizes — mobile */
+	--font-size-heading-mobile: 2.4rem;
+	--font-size-tagline-mobile: 0.7rem;
+	--font-size-code-mobile: 0.7rem;
+	--font-size-label-mobile: 0.65rem;
+	--font-size-input-mobile: 0.65rem;
+	--font-size-button-mobile: 0.65rem;
+	--font-size-providers-mobile: 0.65rem;
 }
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--bg: #1a1a1a;
-		--grid: #2a2a2a;
-		--text: #fafafa;
-		--text-muted: #999;
-		--accent: #44cc11;
-		--border: #444;
-		--border-light: rgba(68, 68, 68, 0.3);
+		--color-bg: #1a1a1a;
+		--color-grid: #2a2a2a;
+		--color-text: #fafafa;
+		--color-text-muted: #999;
+		--color-accent: #44cc11;
+		--color-border: #444;
+		--color-border-light: rgba(68, 68, 68, 0.3);
 	}
 }
+
+/* ============================================
+   GLOBAL LAYOUT
+   ============================================ */
 
 body {
 	font-family: 'Cascadia Code', monospace;
 	font-optical-sizing: auto;
 	font-weight: 400;
-	background-color: var(--bg);
-	color: var(--text);
+	background-color: var(--color-bg);
+	color: var(--color-text);
 	min-height: 100vh;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	line-height: 1.6;
 	overflow-x: hidden;
-	padding: 0 1.5rem;
+	padding: 0 var(--spacing-page-padding);
 }
 
 main {
 	width: 100%;
 	max-width: 560px;
-	padding: 2rem 1rem;
+	padding: var(--spacing-main-block);
 	text-align: center;
 	position: relative;
-}
 
-main::before,
-main::after {
-	content: '';
-	position: absolute;
-	width: 1px;
-	height: 100vh;
-	background: var(--border-light);
-	pointer-events: none;
-	top: 50%;
-	transform: translateY(-50%);
-}
+	&::before,
+	&::after {
+		content: '';
+		position: absolute;
+		width: 1px;
+		height: 100vh;
+		background: var(--color-border-light);
+		pointer-events: none;
+		top: 50%;
+		transform: translateY(-50%);
+	}
 
-main::before {
-	left: 0;
-}
+	&::before {
+		left: 0;
+	}
 
-main::after {
-	right: 0;
-}
-
-h1 {
-	font-size: 3rem;
-	font-weight: 400;
-	letter-spacing: -0.02em;
-	margin-bottom: 0.25rem;
-	color: var(--text);
-}
-
-p.tagline {
-	font-size: 0.875rem;
-	color: var(--text-muted);
-	margin-bottom: 1.5rem;
-	text-transform: none;
-	letter-spacing: 0;
-}
-
-.usage {
-	padding: 0.75rem 1rem;
-	text-align: left;
-	margin-bottom: 1rem;
-	background: var(--bg);
-	position: relative;
-}
-
-.usage::before,
-.usage::after {
-	content: '';
-	position: absolute;
-	left: 0;
-	right: 0;
-	height: 1px;
-	background: var(--border-light);
-}
-
-.usage::before {
-	top: 0;
-	transform: translateY(0);
-	box-shadow: 0 0 0 100vw var(--border-light);
-	clip-path: inset(0 -100vw 0 -100vw);
-}
-
-.usage::after {
-	bottom: 0;
-	transform: translateY(0);
-	box-shadow: 0 0 0 100vw var(--border-light);
-	clip-path: inset(0 -100vw 0 -100vw);
-}
-
-.usage pre {
-	margin: 0;
-	padding: 0.5rem 0;
-	border-bottom: 1px dotted var(--border-light);
-}
-
-.usage pre:last-child {
-	border-bottom: none;
-}
-
-.usage code {
-	font-family: 'Cascadia Code', monospace;
-	font-size: 0.875rem;
-	color: var(--accent);
-}
-
-.providers {
-	font-size: 0.8125rem;
-	color: var(--text-muted);
-	margin-bottom: 1rem;
-}
-
-.url-example {
-	padding: 0.75rem 1rem;
-	text-align: center;
-	margin-bottom: 1rem;
-	background: var(--bg);
-	position: relative;
-}
-
-.url-example::before,
-.url-example::after {
-	content: '';
-	position: absolute;
-	left: 0;
-	right: 0;
-	height: 1px;
-	background: var(--border-light);
-}
-
-.url-example::before {
-	top: 0;
-	transform: translateY(0);
-	box-shadow: 0 0 0 100vw var(--border-light);
-	clip-path: inset(0 -100vw 0 -100vw);
-}
-
-.url-example::after {
-	bottom: 0;
-	transform: translateY(0);
-	box-shadow: 0 0 0 100vw var(--border-light);
-	clip-path: inset(0 -100vw 0 -100vw);
-}
-
-.input-label {
-	display: block;
-	font-size: 0.75rem;
-	color: var(--text-muted);
-	margin-bottom: 0.5rem;
-	text-align: left;
-}
-
-.input-with-button {
-	display: flex;
-	align-items: stretch;
-	gap: 0;
-	margin-bottom: 0.75rem;
-	border: 1px solid var(--border);
-	border-radius: 4px;
-	overflow: hidden;
-	transition: border-color 0.2s;
-}
-
-.input-with-button:focus-within {
-	border-color: var(--accent);
-}
-
-.input-with-button input {
-	flex: 1;
-	padding: 0.625rem 0.75rem;
-	font-family: 'Cascadia Code', monospace;
-	font-size: 0.75rem;
-	color: var(--text);
-	background: var(--bg);
-	border: none;
-	outline: none;
-	min-width: 0;
-}
-
-.copy-button {
-	padding: 0.625rem 1rem;
-	font-family: 'Cascadia Code', monospace;
-	font-size: 0.75rem;
-	color: var(--text);
-	background: var(--bg);
-	border: none;
-	border-left: 1px solid var(--border);
-	cursor: pointer;
-	transition: all 0.2s;
-	white-space: nowrap;
-}
-
-.copy-button:hover {
-	background: color-mix(in srgb, var(--accent) 10%, var(--bg));
-	color: var(--accent);
-}
-
-.copy-button:active {
-	background: color-mix(in srgb, var(--accent) 15%, var(--bg));
-}
-
-.live-preview {
-	padding-top: 0.75rem;
-	border-top: 1px dotted var(--border-light);
-}
-
-.live-preview img {
-	max-width: 100%;
-	height: auto;
+	&::after {
+		right: 0;
+	}
 }
 
 .hero-section {
 	position: relative;
-	background: color-mix(in srgb, var(--text) 3%, var(--bg));
-	padding: 1.5rem 1rem;
-	margin: 0 -1rem;
-}
+	background: color-mix(in srgb, var(--color-text) 3%, var(--color-bg));
+	padding: var(--spacing-hero-block);
+	margin: 0 var(--spacing-hero-inline-offset);
 
-.hero-section::before {
-	content: '';
-	position: absolute;
-	top: 0;
-	left: 0;
-	right: 0;
-	height: 1px;
-	background: var(--border-light);
-	box-shadow: 0 0 0 100vw var(--border-light);
-	clip-path: inset(0 -100vw 0 -100vw);
+	&::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 1px;
+		background: var(--color-border-light);
+		box-shadow: 0 0 0 100vw var(--color-border-light);
+		clip-path: inset(0 -100vw 0 -100vw);
+	}
 }
 
 @media (max-width: 480px) {
 	main {
 		max-width: 448px;
-	}
-
-	h1 {
-		font-size: 2.4rem;
-	}
-
-	p.tagline {
-		font-size: 0.7rem;
-	}
-
-	.usage code {
-		font-size: 0.7rem;
-	}
-
-	.providers {
-		font-size: 0.65rem;
-	}
-
-	.input-label {
-		font-size: 0.65rem;
-	}
-
-	.input-with-button input {
-		font-size: 0.65rem;
-		padding: 0.625rem 0.625rem;
-	}
-
-	.copy-button {
-		font-size: 0.65rem;
-		padding: 0.625rem 0.875rem;
 	}
 }

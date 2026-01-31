@@ -6,7 +6,7 @@
 		<title>bulk</title>
 		<link
 			rel="icon"
-			href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✜</text></svg>"
+			href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><text y=%27.9em%27 font-size=%2790%27>✜</text></svg>"
 		/>
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,35 +14,7 @@
 		<link rel="stylesheet" href="/style.css" />
 	</head>
 	<body>
-		<main>
-			<div class="hero-section">
-				<h1>✜ bulk</h1>
-				<p class="tagline">Package size badges</p>
-
-				<p class="tagline">
-					Shows the actual CDN bundle size - the initial load size when using CDN imports. If the CDN points to a bundle, this is
-					the total bundle size. Unlike bundlephobia which shows minified+gzipped npm package sizes.
-				</p>
-
-				<div class="usage">
-					<pre><code>/:package</code></pre>
-					<pre><code>/:provider/:package</code></pre>
-				</div>
-
-				<div class="providers">providers: jsdelivr, unpkg, skypack, esm.sh</div>
-
-				<div class="url-example">
-					<label for="package-input" class="input-label">Package name</label>
-					<div class="input-with-button">
-						<input type="text" id="package-input" value="zustand" placeholder="e.g., react, zustand" />
-						<button class="copy-button" id="copy-button">copy badge URL</button>
-					</div>
-					<div class="live-preview">
-						<img id="badge-preview" src="/zustand" alt="jsdelivr size" />
-					</div>
-				</div>
-			</div>
-		</main>
+		<div id="root"></div>
 		<script src="/main.js"></script>
 	</body>
 </html>

@@ -1,0 +1,29 @@
+.footer {
+	padding: var(--spacing-footer-padding);
+	margin-top: var(--spacing-section-gap);
+	text-align: center;
+	font-size: var(--font-size-footer);
+	color: var(--text-muted);
+	border-top: 1px solid var(--border-light);
+
+	a {
+		color: var(--text-muted);
+		text-decoration: none;
+		transition: color 0.2s;
+
+		&:hover {
+			color: var(--accent);
+		}
+	}
+
+	span {
+		margin: 0 var(--spacing-footer-separator);
+		opacity: 0.5;
+	}
+}
+
+@media (max-width: 480px) {
+	.footer {
+		font-size: var(--font-size-footer-mobile);
+	}
+}
