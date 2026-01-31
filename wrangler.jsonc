@@ -7,8 +7,10 @@
 	"name": "bulk",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-01-28",
+	"build": {
+		"command": "bun run build-client.ts",
+	},
 	"assets": {
-		// The path to the directory containing the `index.html` file to be served at `/`
 		"directory": "./public",
 	},
 	"observability": {

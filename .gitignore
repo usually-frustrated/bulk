@@ -158,6 +158,11 @@ dist
 .yarn/install-state.gz
 .pnp.\*
 
+# client build output
+public/index.html
+public/style.css
+public/main.js
+
 # wrangler project
 
 .dev.vars*

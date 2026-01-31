@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>bulk</title>
+		<link
+			rel="icon"
+			href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✜</text></svg>"
+		/>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap" rel="stylesheet" />
+		<link rel="stylesheet" href="/style.css" />
+	</head>
+	<body>
+		<main>
+			<div class="hero-section">
+				<h1>✜ bulk</h1>
+				<p class="tagline">Package size badges</p>
+
+				<p class="tagline">
+					Shows the actual CDN bundle size - the initial load size when using CDN imports. If the CDN points to a bundle, this is
+					the total bundle size. Unlike bundlephobia which shows minified+gzipped npm package sizes.
+				</p>
+
+				<div class="usage">
+					<pre><code>/:package</code></pre>
+					<pre><code>/:provider/:package</code></pre>
+				</div>
+
+				<div class="providers">providers: jsdelivr, unpkg, skypack, esm.sh</div>
+
+				<div class="url-example">
+					<div class="input-wrapper">
+						<div class="input-group">
+							<span class="input-prefix">https://bulk.frustrated.dev/</span>
+							<input type="text" id="package-input" value="zustand" />
+						</div>
+						<button class="copy-button" id="copy-button">copy</button>
+					</div>
+					<div class="live-preview">
+						<img id="badge-preview" src="/zustand" alt="jsdelivr size" />
+					</div>
+				</div>
+			</div>
+		</main>
+		<script src="/main.js"></script>
+	</body>
+</html>
