@@ -38,12 +38,13 @@ body {
 	justify-content: center;
 	line-height: 1.6;
 	overflow-x: hidden;
+	padding: 0 1.5rem;
 }
 
 main {
 	width: 100%;
 	max-width: 560px;
-	padding: 1rem;
+	padding: 2rem 1rem;
 	text-align: center;
 	position: relative;
 }
@@ -255,4 +256,38 @@ p.tagline {
 	background: var(--border-light);
 	box-shadow: 0 0 0 100vw var(--border-light);
 	clip-path: inset(0 -100vw 0 -100vw);
+}
+
+@media (max-width: 480px) {
+	main {
+		max-width: 448px;
+	}
+
+	h1 {
+		font-size: 2.4rem;
+	}
+
+	p.tagline {
+		font-size: 0.7rem;
+	}
+
+	.usage code {
+		font-size: 0.7rem;
+	}
+
+	.providers {
+		font-size: 0.65rem;
+	}
+
+	.input-wrapper {
+		font-size: 0.6rem;
+	}
+
+	.url-example input {
+		font-size: 0.6rem;
+	}
+
+	.copy-button {
+		font-size: 0.6rem;
+	}
 }
