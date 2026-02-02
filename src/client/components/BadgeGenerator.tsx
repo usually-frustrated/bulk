@@ -1,4 +1,5 @@
 import { createSignal } from 'solid-js';
+import styles from './BadgeGenerator.module.css';
 
 export function BadgeGenerator() {
 	const domain = window.location.origin;
@@ -25,19 +26,19 @@ export function BadgeGenerator() {
 	};
 
 	return (
-		<section class="badge-generator">
-			<label for="package-input" class="input-label">
+		<section class={styles.badgeGenerator}>
+			<label for="package-input" class={styles.inputLabel}>
 				Package name
 			</label>
-			<div class="input-with-button">
-				{/*<span class="input-prefix">{domain}/</span>*/}
+			<div class={styles.inputWithButton}>
+				{/*<span class={styles.inputPrefix}>{domain}/</span>*/}
 				<input type="text" id="package-input" value={packageName()} onInput={handleInput} placeholder="e.g., react, zustand" />
-				<button class="copy-button" onClick={handleCopy}>
+				<button class={styles.copyButton} onClick={handleCopy}>
 					{copyText()}
 				</button>
 			</div>
-			<div class="live-preview">
-				<div class="badge-url">
+			<div class={styles.livePreview}>
+				<div class={styles.badgeUrl}>
 					<code>
 						<pre>{badgeUrl()}</pre>
 					</code>

@@ -1,16 +1,4 @@
-/* ============================================
-   COMPONENT STYLES
-   ============================================ */
-
-@import './components/Header.css';
-@import './components/UsageInfo.css';
-@import './components/BadgeGenerator.css';
-
-/* ============================================
-   MODERN CSS RESET
-   Josh's Custom CSS Reset
-   https://www.joshwcomeau.com/css/custom-css-reset/
-   ============================================ */
+/* Reset: https://www.joshwcomeau.com/css/custom-css-reset/ */
 
 *,
 *::before,
@@ -77,12 +65,7 @@ h6 {
 	isolation: isolate;
 }
 
-/* ============================================
-   DESIGN TOKENS
-   ============================================ */
-
 :root {
-	/* Colors */
 	--color-bg: #fafafa;
 	--color-grid: #e8e8e8;
 	--color-text: #1a1a1a;
@@ -91,7 +74,6 @@ h6 {
 	--color-border: #d0d0d0;
 	--color-border-light: rgba(208, 208, 208, 0.3);
 
-	/* Spacing — layout */
 	--spacing-page-padding: 1.5rem;
 	--spacing-main-block: 2rem 1rem;
 	--spacing-section-block: 0.75rem 1rem;
@@ -99,14 +81,12 @@ h6 {
 	--spacing-hero-block: 1.5rem 1rem;
 	--spacing-hero-inline-offset: -1rem;
 
-	/* Spacing — content */
 	--spacing-heading-bottom: 0.25rem;
 	--spacing-tagline-bottom: 1.5rem;
 	--spacing-code-block: 0.5rem 0;
 	--spacing-label-bottom: 0.5rem;
 	--spacing-preview-top: 0.75rem;
 
-	/* Spacing — form controls */
 	--spacing-input-inline: 0.75rem;
 	--spacing-input-block: 0.625rem;
 	--spacing-input-block-mobile: 0.625rem;
@@ -116,7 +96,6 @@ h6 {
 	--spacing-button-inline-mobile: 0.875rem;
 	--spacing-button-block-mobile: 0.625rem;
 
-	/* Font sizes */
 	--font-size-heading: 3rem;
 	--font-size-tagline: 0.875rem;
 	--font-size-code: 0.875rem;
@@ -125,7 +104,6 @@ h6 {
 	--font-size-button: 0.75rem;
 	--font-size-providers: 0.8125rem;
 
-	/* Font sizes — mobile */
 	--font-size-heading-mobile: 2.4rem;
 	--font-size-tagline-mobile: 0.7rem;
 	--font-size-code-mobile: 0.7rem;
@@ -146,10 +124,6 @@ h6 {
 		--color-border-light: rgba(68, 68, 68, 0.3);
 	}
 }
-
-/* ============================================
-   GLOBAL LAYOUT
-   ============================================ */
 
 body {
 	font-family: 'Cascadia Code', monospace;

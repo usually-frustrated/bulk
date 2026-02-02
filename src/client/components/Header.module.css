@@ -1,4 +1,4 @@
-h1 {
+.header h1 {
 	font-size: var(--font-size-heading);
 	font-weight: 400;
 	letter-spacing: -0.02em;
@@ -6,7 +6,7 @@ h1 {
 	color: var(--color-text);
 }
 
-p.tagline {
+.tagline {
 	font-size: var(--font-size-tagline);
 	color: var(--color-text-muted);
 	margin-bottom: var(--spacing-tagline-bottom);
@@ -15,11 +15,11 @@ p.tagline {
 }
 
 @media (max-width: 480px) {
-	h1 {
+	.header h1 {
 		font-size: var(--font-size-heading-mobile);
 	}
 
-	p.tagline {
+	.tagline {
 		font-size: var(--font-size-tagline-mobile);
 	}
 }

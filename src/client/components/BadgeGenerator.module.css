@@ -1,4 +1,4 @@
-.url-example {
+.badgeGenerator {
 	padding: var(--spacing-section-block);
 	text-align: center;
 	margin-bottom: var(--spacing-section-gap);
@@ -30,7 +30,7 @@
 	}
 }
 
-.input-label {
+.inputLabel {
 	display: block;
 	font-size: var(--font-size-label);
 	color: var(--color-text-muted);
@@ -38,7 +38,7 @@
 	text-align: left;
 }
 
-.input-with-button {
+.inputWithButton {
 	display: flex;
 	align-items: stretch;
 	gap: 0;
@@ -65,7 +65,7 @@
 	}
 }
 
-.copy-button {
+.copyButton {
 	padding: var(--spacing-button-block) var(--spacing-button-inline);
 	font-family: 'Cascadia Code', monospace;
 	font-size: var(--font-size-button);
@@ -87,7 +87,7 @@
 	}
 }
 
-.live-preview {
+.livePreview {
 	padding-top: var(--spacing-preview-top);
 	border-top: 1px dotted var(--color-border-light);
 
@@ -97,17 +97,21 @@
 	}
 }
 
+.badgeUrl {
+	margin-bottom: var(--spacing-preview-top);
+}
+
 @media (max-width: 480px) {
-	.input-label {
+	.inputLabel {
 		font-size: var(--font-size-label-mobile);
 	}
 
-	.input-with-button input {
+	.inputWithButton input {
 		font-size: var(--font-size-input-mobile);
 		padding: var(--spacing-input-block-mobile) var(--spacing-input-inline-mobile);
 	}
 
-	.copy-button {
+	.copyButton {
 		font-size: var(--font-size-button-mobile);
 		padding: var(--spacing-button-block-mobile) var(--spacing-button-inline-mobile);
 	}

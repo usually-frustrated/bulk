@@ -1,6 +1,8 @@
+import styles from './Footer.module.css';
+
 export function Footer() {
 	return (
-		<footer class="footer">
+		<footer class={styles.footer}>
 			<a href="https://github.com/sushruth" target="_blank" rel="noopener noreferrer">
 				@sushruth
 			</a>
