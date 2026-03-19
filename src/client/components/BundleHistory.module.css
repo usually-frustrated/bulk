@@ -1,0 +1,226 @@
+.bundleHistory {
+	padding: var(--spacing-section-block);
+	text-align: left;
+	position: relative;
+
+	&::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 1px;
+		background: var(--color-border-light);
+		box-shadow: 0 0 0 100vw var(--color-border-light);
+		clip-path: inset(0 -100vw 0 -100vw);
+	}
+}
+
+.sectionLabel {
+	display: block;
+	font-size: var(--font-size-label);
+	color: var(--color-text-muted);
+	margin-bottom: var(--spacing-label-bottom);
+}
+
+/* ─── inputs ──────────────────────────────────────────────────────────────── */
+
+.inputRow {
+	display: flex;
+	align-items: stretch;
+	gap: 0;
+	border: 1px solid var(--color-border);
+	border-radius: 4px;
+	overflow: hidden;
+	margin-bottom: var(--spacing-preview-top);
+	transition: border-color 0.2s;
+
+	&:focus-within {
+		border-color: var(--color-accent);
+	}
+}
+
+.inputPkg,
+.inputExport {
+	padding: var(--spacing-input-block) var(--spacing-input-inline);
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-input);
+	color: var(--color-text);
+	background: var(--color-bg);
+	border: none;
+	outline: none;
+	min-width: 0;
+}
+
+.inputPkg {
+	flex: 1;
+	border-right: 1px solid var(--color-border);
+}
+
+.inputExport {
+	width: 9rem;
+	border-right: 1px solid var(--color-border);
+}
+
+.analyzeBtn {
+	padding: var(--spacing-button-block) var(--spacing-button-inline);
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-button);
+	color: var(--color-text);
+	background: var(--color-bg);
+	border: none;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: all 0.2s;
+
+	&:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
+		color: var(--color-accent);
+	}
+
+	&:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+}
+
+/* ─── error ───────────────────────────────────────────────────────────────── */
+
+.error {
+	font-size: var(--font-size-label);
+	color: #cc4444;
+	margin-top: 0.25rem;
+}
+
+/* ─── chart ───────────────────────────────────────────────────────────────── */
+
+.chartWrap {
+	margin-top: var(--spacing-preview-top);
+}
+
+.chart {
+	display: block;
+	overflow: visible;
+}
+
+.gridLine {
+	stroke: var(--color-border-light);
+	stroke-width: 1;
+}
+
+.axisLabel {
+	font-family: 'Cascadia Code', monospace;
+	font-size: 11px;
+	fill: var(--color-text-muted);
+}
+
+.area {
+	fill: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.line {
+	stroke: var(--color-accent);
+	stroke-width: 1.5;
+}
+
+.point {
+	fill: var(--color-accent);
+	stroke: var(--color-bg);
+	stroke-width: 1.5;
+	cursor: crosshair;
+	transition: r 0.1s;
+
+	&:hover {
+		r: 6;
+	}
+}
+
+.pointPending {
+	fill: none;
+	stroke: var(--color-border);
+	stroke-width: 1.5;
+	stroke-dasharray: 2 2;
+	cursor: crosshair;
+}
+
+/* ─── tooltip ─────────────────────────────────────────────────────────────── */
+
+.tooltipGroup {
+	pointer-events: none;
+}
+
+.crosshair {
+	stroke: var(--color-border);
+	stroke-width: 1;
+	stroke-dasharray: 3 2;
+}
+
+.tooltipBox {
+	fill: var(--color-bg);
+	stroke: var(--color-border);
+	stroke-width: 1;
+}
+
+.tooltipVersion {
+	font-family: 'Cascadia Code', monospace;
+	font-size: 10px;
+	fill: var(--color-text-muted);
+}
+
+.tooltipBytes {
+	font-family: 'Cascadia Code', monospace;
+	font-size: 11px;
+	fill: var(--color-accent);
+	font-weight: 600;
+}
+
+.tooltipPending {
+	font-family: 'Cascadia Code', monospace;
+	font-size: 10px;
+	fill: var(--color-text-muted);
+	font-style: italic;
+}
+
+/* ─── footer ──────────────────────────────────────────────────────────────── */
+
+.chartFooter {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 0.375rem;
+}
+
+.statItem {
+	font-size: var(--font-size-label);
+	color: var(--color-text-muted);
+}
+
+.computing {
+	font-size: var(--font-size-label);
+	color: var(--color-accent);
+}
+
+/* ─── mobile ──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+	.inputRow {
+		flex-wrap: wrap;
+	}
+
+	.inputPkg {
+		flex: 1 0 100%;
+		border-right: none;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.inputExport {
+		flex: 1;
+		width: auto;
+	}
+
+	.sectionLabel,
+	.statItem,
+	.computing {
+		font-size: var(--font-size-label-mobile);
+	}
+}

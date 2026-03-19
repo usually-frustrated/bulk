@@ -2,6 +2,7 @@ import type { Env, BundleJobMessage } from './types';
 import { handleBadgeRequest } from './handlers/badge';
 import { handleBundleRequest } from './handlers/bundle';
 import { handleBundleStatus } from './handlers/bundle-status';
+import { handleBundleHistory } from './handlers/bundle-history';
 import { handleQueue } from './workers/bundler-queue';
 
 export { QueueCounter } from './durable-objects/queue-counter';
@@ -22,6 +23,11 @@ export default {
 		// Bundle size endpoint — check before static assets
 		if (pathname.startsWith('/_bundle/')) {
 			return handleBundleRequest(request, env);
+		}
+
+		// Bundle history (all versions for a package/export)
+		if (pathname.startsWith('/_bundle-history/')) {
+			return handleBundleHistory(request, env);
 		}
 
 		// Static assets (CSS, JS, HTML for the SPA)
