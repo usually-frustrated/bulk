@@ -1,1 +1,3 @@
-export interface Env {}
+export interface Env {
+	ASSETS: Fetcher;
+}

@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'fs';
+import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync, renameSync } from 'fs';
 import { join } from 'path';
 import { SolidPlugin } from '@dschz/bun-plugin-solid';
 
@@ -26,9 +26,12 @@ if (!buildResult.success) {
 	process.exit(1);
 }
 
-const css = readFileSync(join(outDir, 'main.css'), 'utf-8');
+// Move compiled CSS into the /_/ static asset namespace
+mkdirSync(join(outDir, '_'), { recursive: true });
+renameSync(join(outDir, 'main.css'), join(outDir, '_', 'styles.css'));
+
+// Copy index.html as-is; it links to /_/styles.css via <link> tag
 const html = readFileSync(join(clientDir, 'index.html'), 'utf-8');
-const htmlWithCss = html.replace('</head>', `<style>${css}</style>\n</head>`);
-writeFileSync(join(outDir, 'index.html'), htmlWithCss);
+writeFileSync(join(outDir, 'index.html'), html);
 
 console.log('Client build complete.');

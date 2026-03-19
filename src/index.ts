@@ -12,6 +12,11 @@ export default {
 			return new Response('Not found', { status: 404 });
 		}
 
+		// Serve static assets from the /_/ namespace directly, bypassing badge routing
+		if (url.pathname.startsWith('/_/')) {
+			return env.ASSETS.fetch(request);
+		}
+
 		return handleBadgeRequest(request, ctx);
 	},
 };
