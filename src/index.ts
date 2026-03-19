@@ -1,22 +1,38 @@
-import type { Env } from './types';
+import type { Env, BundleJobMessage } from './types';
 import { handleBadgeRequest } from './handlers/badge';
+import { handleBundleRequest } from './handlers/bundle';
+import { handleBundleStatus } from './handlers/bundle-status';
+import { handleQueue } from './workers/bundler-queue';
 
-export { Env };
+export { QueueCounter } from './durable-objects/queue-counter';
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		const url = new URL(request.url);
+		const { pathname } = new URL(request.url);
 
-		// Skip favicon requests
-		if (url.pathname === '/favicon.ico') {
+		if (pathname === '/favicon.ico') {
 			return new Response('Not found', { status: 404 });
 		}
 
-		// Serve static assets from the /_/ namespace directly, bypassing badge routing
-		if (url.pathname.startsWith('/_/')) {
+		// Bundle status polling / SSE — check before static assets
+		if (pathname.startsWith('/_bundle-status/')) {
+			return handleBundleStatus(request, env);
+		}
+
+		// Bundle size endpoint — check before static assets
+		if (pathname.startsWith('/_bundle/')) {
+			return handleBundleRequest(request, env);
+		}
+
+		// Static assets (CSS, JS, HTML for the SPA)
+		if (pathname.startsWith('/_/')) {
 			return env.ASSETS.fetch(request);
 		}
 
 		return handleBadgeRequest(request, ctx);
+	},
+
+	async queue(batch: MessageBatch<BundleJobMessage>, env: Env): Promise<void> {
+		return handleQueue(batch, env);
 	},
 };

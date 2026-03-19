@@ -17,26 +17,91 @@
 		"enabled": true,
 	},
 	/**
-	 * Smart Placement
-	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
+	 * Durable Objects
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#durable-objects
 	 */
-	// "placement": {  "mode": "smart" }
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "QUEUE_COUNTER",
+				"class_name": "QueueCounter",
+			},
+		],
+	},
 	/**
-	 * Bindings
-	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-	 * databases, object storage, AI inference, real-time communication and more.
-	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
+	 * Migrations required when adding/renaming/deleting Durable Object classes.
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#migrations
 	 */
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_classes": ["QueueCounter"],
+		},
+	],
+	/**
+	 * D1 Database
+	 * Run: wrangler d1 create bulk-bundle
+	 * Then paste the database_id below.
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#d1-databases
+	 */
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "bulk-bundle",
+			// TODO: replace with real ID from: wrangler d1 create bulk-bundle
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "./migrations",
+		},
+	],
+	/**
+	 * KV Namespace — version resolution cache for `@latest` tags (1hr TTL)
+	 * Run: wrangler kv namespace create VERSION_CACHE
+	 * Then paste the id below.
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#kv-namespaces
+	 */
+	"kv_namespaces": [
+		{
+			"binding": "VERSION_CACHE",
+			// TODO: replace with real ID from: wrangler kv namespace create VERSION_CACHE
+			"id": "00000000000000000000000000000000",
+		},
+	],
+	/**
+	 * Queues — bundle job queue
+	 * Run: wrangler queues create bundle-queue
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#queues
+	 */
+	"queues": {
+		"producers": [
+			{
+				"binding": "BUNDLE_QUEUE",
+				"queue": "bundle-queue",
+			},
+		],
+		"consumers": [
+			{
+				"queue": "bundle-queue",
+				// One job per Worker invocation — concurrency controlled here, not in the job
+				"max_batch_size": 1,
+				"max_retries": 2,
+				// Max simultaneous consumer Worker invocations
+				"max_concurrency": 15,
+				"dead_letter_queue": "bundle-queue-dlq",
+			},
+		],
+	},
+	/**
+	 * WASM Modules — esbuild bundler
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#webassembly-modules
+	 */
+	"wasm_modules": {
+		"ESBUILD_WASM": "./node_modules/esbuild-wasm/esbuild.wasm",
+	},
 	/**
 	 * Environment Variables
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-	 * Note: Use secrets to store sensitive data.
-	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 */
-	// "vars": {  "MY_VARIABLE": "production_value" }
-	/**
-	 * Service Bindings (communicate between multiple Workers)
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-	 */
-	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+	"vars": {
+		// Hard limits for backpressure — enforced by the QueueCounter Durable Object
+		"MAX_QUEUE": "200",
+	},
 }
