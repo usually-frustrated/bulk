@@ -135,14 +135,6 @@
 	}
 }
 
-.pointPending {
-	fill: none;
-	stroke: var(--color-border);
-	stroke-width: 1.5;
-	stroke-dasharray: 2 2;
-	cursor: crosshair;
-}
-
 /* ─── tooltip ─────────────────────────────────────────────────────────────── */
 
 .tooltipGroup {
@@ -174,13 +166,6 @@
 	font-weight: 600;
 }
 
-.tooltipPending {
-	font-family: 'Cascadia Code', monospace;
-	font-size: 10px;
-	fill: var(--color-text-muted);
-	font-style: italic;
-}
-
 /* ─── footer ──────────────────────────────────────────────────────────────── */
 
 .chartFooter {
@@ -193,11 +178,6 @@
 .statItem {
 	font-size: var(--font-size-label);
 	color: var(--color-text-muted);
-}
-
-.computing {
-	font-size: var(--font-size-label);
-	color: var(--color-accent);
 }
 
 /* ─── mobile ──────────────────────────────────────────────────────────────── */

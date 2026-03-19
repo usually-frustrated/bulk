@@ -1,5 +1,4 @@
 import type { Env } from '../types';
-import type { BundleJobMessage } from '../types';
 
 interface VersionEntry {
 	version: string;
@@ -10,12 +9,8 @@ export interface HistoryVersion {
 	version: string;
 	publishedAt: string;
 	bytes: number | null;
-	jobId?: string;
 }
 
-// /_bundle-history/<pkg>[/<exportPath>]
-// Scoped:   /_bundle-history/@scope/name[/export]
-// Unscoped: /_bundle-history/name[/export]
 function parseHistoryPath(pathname: string): { package: string; exportPath: string } | null {
 	const prefix = '/_bundle-history/';
 	if (!pathname.startsWith(prefix)) return null;
@@ -47,14 +42,13 @@ function semverGt(a: string, b: string): boolean {
 	return false;
 }
 
-/** One representative version per minor (highest patch), sorted by publish date, capped at 50. */
+/** One version per minor (highest patch), sorted by publish date, capped at 50. */
 function filterVersionHistory(time: Record<string, string>): VersionEntry[] {
 	const SKIP = new Set(['created', 'modified']);
 	const groups = new Map<string, VersionEntry>();
 
 	for (const [v, date] of Object.entries(time)) {
-		if (SKIP.has(v) || v.includes('-')) continue;
-		if (!parseSemver(v)) continue;
+		if (SKIP.has(v) || v.includes('-') || !parseSemver(v)) continue;
 		const key = v.split('.').slice(0, 2).join('.');
 		const prev = groups.get(key);
 		if (!prev || semverGt(v, prev.version)) groups.set(key, { version: v, publishedAt: date });
@@ -65,9 +59,9 @@ function filterVersionHistory(time: Record<string, string>): VersionEntry[] {
 		.slice(-50);
 }
 
-async function getVersionHistory(pkg: string, env: Env): Promise<VersionEntry[]> {
+async function getVersionList(pkg: string, env: Env): Promise<VersionEntry[]> {
 	const kvKey = `pkg-history:${pkg}`;
-	const hit = await env.VERSION_CACHE.get(kvKey);
+	const hit = await env.CACHE.get(kvKey);
 	if (hit) return JSON.parse(hit) as VersionEntry[];
 
 	const res = await fetch(`https://registry.npmjs.org/${pkg}`, {
@@ -76,19 +70,30 @@ async function getVersionHistory(pkg: string, env: Env): Promise<VersionEntry[]>
 	if (!res.ok) throw Object.assign(new Error(`Package not found: ${pkg}`), { status: 404 });
 
 	const data = (await res.json()) as { time?: Record<string, string> };
-	if (!data.time) throw new Error('No version history in registry response');
+	if (!data.time) throw new Error('No version history available');
 
 	const entries = filterVersionHistory(data.time);
-	// 24-hour cache — new releases show up next day at the latest
-	await env.VERSION_CACHE.put(kvKey, JSON.stringify(entries), { expirationTtl: 86400 });
+	await env.CACHE.put(kvKey, JSON.stringify(entries), { expirationTtl: 86400 });
 	return entries;
 }
 
-function counterStub(env: Env): DurableObjectStub {
-	return env.QUEUE_COUNTER.get(env.QUEUE_COUNTER.idFromName('global'));
+async function fetchSize(pkg: string, version: string, exportPath: string): Promise<number | null> {
+	try {
+		const base = `https://esm.sh/${pkg}@${version}`;
+		const url = exportPath === 'index' ? base : `${base}/${exportPath}`;
+		const res = await fetch(url, { redirect: 'follow' });
+		if (!res.ok) return null;
+		return (await res.arrayBuffer()).byteLength;
+	} catch {
+		return null;
+	}
 }
 
-export async function handleBundleHistory(request: Request, env: Env): Promise<Response> {
+export async function handleBundleHistory(
+	request: Request,
+	env: Env,
+	ctx: ExecutionContext,
+): Promise<Response> {
 	if (request.method !== 'GET') return new Response('Method not allowed', { status: 405 });
 
 	const parsed = parseHistoryPath(new URL(request.url).pathname);
@@ -98,82 +103,39 @@ export async function handleBundleHistory(request: Request, env: Env): Promise<R
 
 	let entries: VersionEntry[];
 	try {
-		entries = await getVersionHistory(pkg, env);
+		entries = await getVersionList(pkg, env);
 	} catch (err: unknown) {
 		const status = (err as { status?: number }).status ?? 502;
 		return new Response(err instanceof Error ? err.message : 'Failed', { status });
 	}
 
-	if (entries.length === 0) {
+	if (!entries.length) {
 		return Response.json({ package: pkg, export: exportPath, versions: [] });
 	}
 
-	const versions = entries.map((e) => e.version);
-	const ph = versions.map(() => '?').join(',');
+	// Check KV cache for all versions in parallel
+	const cacheKeys = entries.map((e) => `bundle:${pkg}@${e.version}:${exportPath}`);
+	const cached = await Promise.all(cacheKeys.map((k) => env.CACHE.get(k)));
 
-	// Batch-fetch all cached sizes in one query
-	const cacheRows = await env.DB.prepare(
-		`SELECT version, bytes FROM bundle_cache
-		 WHERE package = ? AND export_path = ? AND version IN (${ph})`,
-	)
-		.bind(pkg, exportPath, ...versions)
-		.all<{ version: string; bytes: number }>();
+	// Fetch from CDN for any cache misses — all in parallel
+	const misses = entries.filter((_, i) => cached[i] === null);
+	const fetched = await Promise.all(misses.map((e) => fetchSize(pkg, e.version, exportPath)));
 
-	const cachedMap = new Map(cacheRows.results.map((r) => [r.version, r.bytes]));
+	// Write new results to KV in the background (fire and forget)
+	const writes = misses
+		.map((e, i) =>
+			fetched[i] !== null ? env.CACHE.put(`bundle:${pkg}@${e.version}:${exportPath}`, String(fetched[i])) : null,
+		)
+		.filter((p): p is Promise<void> => p !== null);
+	if (writes.length) ctx.waitUntil(Promise.all(writes));
 
-	// Fetch any existing pending/processing jobs for these versions
-	const jobRows = await env.DB.prepare(
-		`SELECT version, id FROM bundle_jobs
-		 WHERE package = ? AND export_path = ? AND version IN (${ph})
-		   AND status IN ('pending', 'processing')
-		 ORDER BY created_at DESC`,
-	)
-		.bind(pkg, exportPath, ...versions)
-		.all<{ version: string; id: string }>();
+	// Build final response — merge cached + freshly fetched
+	const fetchedMap = new Map(misses.map((e, i) => [e.version, fetched[i]]));
+	const versions: HistoryVersion[] = entries.map((e, i) => ({
+		version: e.version,
+		publishedAt: e.publishedAt,
+		bytes: cached[i] !== null ? parseInt(cached[i]!, 10) : (fetchedMap.get(e.version) ?? null),
+	}));
 
-	// Keep the most recent job per version
-	const pendingMap = new Map<string, string>();
-	for (const row of jobRows.results) {
-		if (!pendingMap.has(row.version)) pendingMap.set(row.version, row.id);
-	}
-
-	const counter = counterStub(env);
-	const result: HistoryVersion[] = [];
-
-	for (const { version, publishedAt } of entries) {
-		if (cachedMap.has(version)) {
-			result.push({ version, publishedAt, bytes: cachedMap.get(version)! });
-			continue;
-		}
-		if (pendingMap.has(version)) {
-			result.push({ version, publishedAt, bytes: null, jobId: pendingMap.get(version) });
-			continue;
-		}
-
-		// Attempt to enqueue — skip silently if queue is full
-		const counterRes = await counter.fetch('http://do/increment');
-		if (counterRes.status === 429) {
-			result.push({ version, publishedAt, bytes: null });
-			continue;
-		}
-
-		const jobId = crypto.randomUUID();
-		try {
-			await env.DB.prepare(
-				`INSERT INTO bundle_jobs (id, package, version, export_path, status)
-				 VALUES (?, ?, ?, ?, 'pending')`,
-			)
-				.bind(jobId, pkg, version, exportPath)
-				.run();
-
-			const msg: BundleJobMessage = { jobId, package: pkg, version, exportPath };
-			await env.BUNDLE_QUEUE.send(msg);
-			result.push({ version, publishedAt, bytes: null, jobId });
-		} catch {
-			await counter.fetch('http://do/decrement').catch(() => {});
-			result.push({ version, publishedAt, bytes: null });
-		}
-	}
-
-	return Response.json({ package: pkg, export: exportPath, versions: result });
+	return Response.json({ package: pkg, export: exportPath, versions });
 }
