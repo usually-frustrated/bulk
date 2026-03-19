@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { SolidPlugin } from '@dschz/bun-plugin-solid';
 
@@ -26,6 +26,9 @@ if (!buildResult.success) {
 	process.exit(1);
 }
 
-cpSync(join(clientDir, 'index.html'), join(outDir, 'index.html'));
+const css = readFileSync(join(outDir, 'main.css'), 'utf-8');
+const html = readFileSync(join(clientDir, 'index.html'), 'utf-8');
+const htmlWithCss = html.replace('</head>', `<style>${css}</style>\n</head>`);
+writeFileSync(join(outDir, 'index.html'), htmlWithCss);
 
 console.log('Client build complete.');
