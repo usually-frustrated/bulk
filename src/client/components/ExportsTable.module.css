@@ -56,8 +56,9 @@
 	vertical-align: middle;
 
 	img {
-		display: block;
-		height: auto;
+		display: inline-block;
+		height: 20px;
+		width: auto;
 	}
 }
 

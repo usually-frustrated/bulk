@@ -53,7 +53,7 @@ interface Props {
 }
 
 export function BundleHistory(props: Props) {
-	const [exportInput, setExportInput] = createSignal('index');
+	const [exportInput, setExportInput] = createSignal('');
 	const [data, setData] = createSignal<HistoryData | null>(null);
 	const [loading, setLoading] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
