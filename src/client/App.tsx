@@ -1,6 +1,6 @@
 import { createSignal, Show } from 'solid-js';
 import { Header } from './components/Header';
-import { UsageInfo } from './components/UsageInfo';
+import { Footer } from './components/Footer';
 import { ExportsTable } from './components/ExportsTable';
 import { BundleHistory } from './components/BundleHistory';
 import { LoadingOverlay } from './components/LoadingOverlay';
@@ -17,7 +17,11 @@ export type CdnId = (typeof CDN_OPTIONS)[number]['id'];
 export function App() {
 	const [pkg, setPkg] = createSignal('zustand');
 	const [cdn, setCdn] = createSignal<CdnId>('jsdelivr');
-	const [loading, setLoading] = createSignal(false);
+
+	// Counter-based loading: overlay stays up until ALL active fetches finish
+	const [loadingCount, setLoadingCount] = createSignal(0);
+	const loading = () => loadingCount() > 0;
+	const handleLoading = (v: boolean) => setLoadingCount((c) => Math.max(0, c + (v ? 1 : -1)));
 
 	return (
 		<main>
@@ -55,10 +59,10 @@ export function App() {
 						</div>
 					</div>
 				</div>
-				<ExportsTable pkg={pkg()} cdn={cdn()} onLoading={setLoading} />
-				<BundleHistory pkg={pkg()} cdn={cdn()} onLoading={setLoading} />
-				<UsageInfo />
+				<ExportsTable pkg={pkg()} cdn={cdn()} onLoading={handleLoading} />
+				<BundleHistory pkg={pkg()} cdn={cdn()} onLoading={handleLoading} />
 			</div>
+			<Footer />
 			<Show when={loading()}>
 				<LoadingOverlay />
 			</Show>

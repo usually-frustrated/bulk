@@ -96,7 +96,7 @@ export function ExportsTable(props: Props) {
 		setExportKeys([]);
 		props.onLoading(true);
 		resolveExports(pkg)
-			.then((rows) => setExportKeys(rows.map((r) => r.key)))
+			.then((keys) => setExportKeys(keys))
 			.catch((e) => setError(e instanceof Error ? e.message : 'Failed to load package info'))
 			.finally(() => props.onLoading(false));
 	});
