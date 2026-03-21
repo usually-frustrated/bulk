@@ -27,16 +27,15 @@
 }
 
 .spinner {
-	width: var(--font-size-heading);
-	height: var(--font-size-heading);
-	border-radius: 18%;
+	font-size: var(--font-size-heading);
+	line-height: 1;
+	display: block;
 	animation: spinDecel 2s linear infinite;
 	will-change: transform;
 }
 
 @media (max-width: 480px) {
 	.spinner {
-		width: var(--font-size-heading-mobile);
-		height: var(--font-size-heading-mobile);
+		font-size: var(--font-size-heading-mobile);
 	}
 }
