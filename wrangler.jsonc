@@ -17,26 +17,22 @@
 		"enabled": true,
 	},
 	/**
-	 * Smart Placement
-	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
+	 * D1 Database — all persistent state: cdn_sizes, package_exports,
+	 * package_versions, version_resolution.
+	 *
+	 * Setup:
+	 *   wrangler d1 create bulk-bundle
+	 *   # paste the database_id below
+	 *   wrangler d1 migrations apply bulk-bundle --remote
+	 *
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#d1-databases
 	 */
-	// "placement": {  "mode": "smart" }
-	/**
-	 * Bindings
-	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-	 * databases, object storage, AI inference, real-time communication and more.
-	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
-	 */
-	/**
-	 * Environment Variables
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-	 * Note: Use secrets to store sensitive data.
-	 * https://developers.cloudflare.com/workers/configuration/secrets/
-	 */
-	// "vars": {  "MY_VARIABLE": "production_value" }
-	/**
-	 * Service Bindings (communicate between multiple Workers)
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-	 */
-	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "bulk-bundle",
+			"database_id": "b60264ce-f58a-4a80-a208-c71ffde9ebb4",
+			"migrations_dir": "./migrations",
+		},
+	],
 }
