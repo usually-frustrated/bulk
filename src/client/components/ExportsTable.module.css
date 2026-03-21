@@ -1,0 +1,115 @@
+.exportsTable {
+	padding: var(--spacing-section-block);
+	text-align: left;
+	margin-bottom: var(--spacing-section-gap);
+	position: relative;
+
+	&::before,
+	&::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		height: 1px;
+		background: var(--color-border-light);
+		box-shadow: 0 0 0 100vw var(--color-border-light);
+		clip-path: inset(0 -100vw 0 -100vw);
+	}
+
+	&::before {
+		top: 0;
+	}
+
+	&::after {
+		bottom: 0;
+	}
+}
+
+.sectionLabel {
+	display: block;
+	font-size: var(--font-size-label);
+	color: var(--color-text-muted);
+	margin-bottom: var(--spacing-label-bottom);
+}
+
+.error {
+	font-size: var(--font-size-label);
+	color: #cc4444;
+}
+
+.table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.row {
+	border-bottom: 1px solid var(--color-border-light);
+
+	&:last-child {
+		border-bottom: none;
+	}
+}
+
+.badgeCell {
+	padding: 0.35rem 0.5rem 0.35rem 0;
+	white-space: nowrap;
+	vertical-align: middle;
+}
+
+.badgeImg {
+	display: inline-block !important;
+	height: 20px !important;
+	width: auto !important;
+	max-width: none !important;
+}
+
+.urlCell {
+	padding: 0.35rem 0.5rem;
+	vertical-align: middle;
+	width: 100%;
+}
+
+.url {
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-code);
+	color: var(--color-text-muted);
+	word-break: break-all;
+}
+
+.copyCell {
+	padding: 0.35rem 0 0.35rem 0.5rem;
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+.copyBtn {
+	padding: 0.25rem 0.6rem;
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-button);
+	color: var(--color-text);
+	background: var(--color-bg);
+	border: 1px solid var(--color-border);
+	border-radius: 3px;
+	cursor: pointer;
+	transition: all 0.2s;
+
+	&:hover {
+		background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
+		color: var(--color-accent);
+		border-color: var(--color-accent);
+	}
+}
+
+@media (max-width: 480px) {
+	.sectionLabel {
+		font-size: var(--font-size-label-mobile);
+	}
+
+	.url {
+		font-size: var(--font-size-code-mobile);
+	}
+
+	.copyBtn {
+		font-size: var(--font-size-button-mobile);
+	}
+}

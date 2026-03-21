@@ -1,0 +1,41 @@
+/* Deceleration keyframes: fast start, progressively slows to a halt, then repeats.
+   Angle values follow f(t) = 1 - (1-t)^3 scaled to 360°, with a pause at the end. */
+@keyframes spinDecel {
+	0%   { transform: rotate(0deg); }
+	10%  { transform: rotate(97deg); }
+	20%  { transform: rotate(176deg); }
+	30%  { transform: rotate(236deg); }
+	40%  { transform: rotate(282deg); }
+	50%  { transform: rotate(315deg); }
+	60%  { transform: rotate(337deg); }
+	70%  { transform: rotate(350deg); }
+	80%  { transform: rotate(357deg); }
+	87%  { transform: rotate(360deg); }
+	100% { transform: rotate(360deg); }
+}
+
+.overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 100;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+	background: color-mix(in srgb, var(--color-bg) 30%, transparent);
+}
+
+.spinner {
+	font-size: var(--font-size-heading);
+	line-height: 1;
+	display: block;
+	animation: spinDecel 2s linear infinite;
+	will-change: transform;
+}
+
+@media (max-width: 480px) {
+	.spinner {
+		font-size: var(--font-size-heading-mobile);
+	}
+}

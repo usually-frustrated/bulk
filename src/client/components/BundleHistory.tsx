@@ -1,4 +1,4 @@
-import { batch, createSignal, For, Show } from 'solid-js';
+import { batch, createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import styles from './BundleHistory.module.css';
 
 interface VersionData {
@@ -47,8 +47,13 @@ function toY(bytes: number, maxBytes: number): number {
 
 // ─── component ──────────────────────────────────────────────────────────────
 
-export function BundleHistory() {
-	const [pkgInput, setPkgInput] = createSignal('');
+interface Props {
+	pkg: string;
+	cdn: string;
+	onLoading: (v: boolean) => void;
+}
+
+export function BundleHistory(props: Props) {
 	const [exportInput, setExportInput] = createSignal('');
 	const [data, setData] = createSignal<HistoryData | null>(null);
 	const [loading, setLoading] = createSignal(false);
@@ -56,7 +61,7 @@ export function BundleHistory() {
 	const [hoveredIdx, setHoveredIdx] = createSignal<number | null>(null);
 
 	async function analyze() {
-		const pkg = pkgInput().trim();
+		const pkg = props.pkg.trim();
 		if (!pkg) return;
 		const exp = exportInput().trim() || 'index';
 
@@ -66,17 +71,34 @@ export function BundleHistory() {
 			setData(null);
 			setHoveredIdx(null);
 		});
+		props.onLoading(true);
 
 		try {
-			const res = await fetch(`/_bundle-history/${pkg}/${exp}`);
+			// Map provider ID (badge system) to bundle CDN ID (bundle system)
+		const bundleCdn = props.cdn === 'esmsh' ? 'esm.sh' : props.cdn;
+		const res = await fetch(`/_bundle-history/${pkg}/${exp}?cdn=${bundleCdn}`);
 			if (!res.ok) throw new Error(await res.text());
 			setData((await res.json()) as HistoryData);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to load history');
 		} finally {
 			setLoading(false);
+			props.onLoading(false);
 		}
 	}
+
+	// Auto-load on mount
+	onMount(() => analyze());
+
+	// Reset when pkg changes
+	createEffect(() => {
+		const _ = props.pkg;
+		batch(() => {
+			setData(null);
+			setError(null);
+			setHoveredIdx(null);
+		});
+	});
 
 	// ─── chart derivations ──────────────────────────────────────────────────
 
@@ -141,14 +163,6 @@ export function BundleHistory() {
 			<label class={styles.sectionLabel}>Bundle size history</label>
 
 			<div class={styles.inputRow}>
-				<input
-					type="text"
-					class={styles.inputPkg}
-					placeholder="package (e.g., react)"
-					value={pkgInput()}
-					onInput={(e) => setPkgInput(e.currentTarget.value)}
-					onKeyDown={(e) => e.key === 'Enter' && analyze()}
-				/>
 				<input
 					type="text"
 					class={styles.inputExport}

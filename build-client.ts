@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync, renameSync } from 'fs';
+import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync, renameSync, copyFileSync } from 'fs';
 import { join } from 'path';
 import { SolidPlugin } from '@dschz/bun-plugin-solid';
 
@@ -33,5 +33,8 @@ renameSync(join(outDir, 'main.css'), join(outDir, '_', 'styles.css'));
 // Copy index.html as-is; it links to /_/styles.css via <link> tag
 const html = readFileSync(join(clientDir, 'index.html'), 'utf-8');
 writeFileSync(join(outDir, 'index.html'), html);
+
+// Copy logo into the /_/ static asset namespace
+copyFileSync(join(clientDir, 'logo.png'), join(outDir, '_', 'logo.png'));
 
 console.log('Client build complete.');

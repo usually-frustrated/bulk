@@ -40,7 +40,6 @@
 	}
 }
 
-.inputPkg,
 .inputExport {
 	padding: var(--spacing-input-block) var(--spacing-input-inline);
 	font-family: 'Cascadia Code', monospace;
@@ -50,15 +49,7 @@
 	border: none;
 	outline: none;
 	min-width: 0;
-}
-
-.inputPkg {
 	flex: 1;
-	border-right: 1px solid var(--color-border);
-}
-
-.inputExport {
-	width: 9rem;
 	border-right: 1px solid var(--color-border);
 }
 
@@ -185,12 +176,6 @@
 @media (max-width: 480px) {
 	.inputRow {
 		flex-wrap: wrap;
-	}
-
-	.inputPkg {
-		flex: 1 0 100%;
-		border-right: none;
-		border-bottom: 1px solid var(--color-border);
 	}
 
 	.inputExport {
