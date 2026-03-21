@@ -31,8 +31,7 @@
 		{
 			"binding": "DB",
 			"database_name": "bulk-bundle",
-			// TODO: replace with real ID from: wrangler d1 create bulk-bundle
-			"database_id": "00000000-0000-0000-0000-000000000000",
+			"database_id": "b60264ce-f58a-4a80-a208-c71ffde9ebb4",
 			"migrations_dir": "./migrations",
 		},
 	],
