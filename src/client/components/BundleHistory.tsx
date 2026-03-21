@@ -49,6 +49,7 @@ function toY(bytes: number, maxBytes: number): number {
 
 interface Props {
 	pkg: string;
+	cdn: string;
 	onLoading: (v: boolean) => void;
 }
 
@@ -73,7 +74,9 @@ export function BundleHistory(props: Props) {
 		props.onLoading(true);
 
 		try {
-			const res = await fetch(`/_bundle-history/${pkg}/${exp}`);
+			// Map provider ID (badge system) to bundle CDN ID (bundle system)
+		const bundleCdn = props.cdn === 'esmsh' ? 'esm.sh' : props.cdn;
+		const res = await fetch(`/_bundle-history/${pkg}/${exp}?cdn=${bundleCdn}`);
 			if (!res.ok) throw new Error(await res.text());
 			setData((await res.json()) as HistoryData);
 		} catch (err) {

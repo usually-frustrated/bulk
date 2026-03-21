@@ -6,11 +6,9 @@ interface ExportRow {
 	badgePath: string;
 }
 
-function toRow(pkg: string, key: string): ExportRow {
-	return {
-		key,
-		badgePath: key === '.' ? `/${pkg}` : `/${pkg}/${key.replace(/^\.\//, '')}`,
-	};
+function toRow(pkg: string, key: string, cdn: string): ExportRow {
+	const suffix = key === '.' ? `/${pkg}` : `/${pkg}/${key.replace(/^\.\//, '')}`;
+	return { key, badgePath: `/${cdn}${suffix}` };
 }
 
 function matchesWildcard(key: string, pattern: string): boolean {
@@ -24,7 +22,7 @@ function flatFiles(node: { type: string; path: string; files?: unknown[] }): str
 	return ((node.files ?? []) as typeof node[]).flatMap(flatFiles);
 }
 
-async function resolveExports(pkg: string): Promise<ExportRow[]> {
+async function resolveExports(pkg: string): Promise<string[]> {
 	const pkgRes = await fetch(`https://registry.npmjs.org/${pkg}/latest`);
 	if (!pkgRes.ok) throw new Error(`Package "${pkg}" not found`);
 	const pkgData = await pkgRes.json();
@@ -32,7 +30,7 @@ async function resolveExports(pkg: string): Promise<ExportRow[]> {
 	const exportsField = pkgData.exports as Record<string, unknown> | string | null | undefined;
 
 	if (!exportsField || typeof exportsField === 'string') {
-		return [toRow(pkg, '.')];
+		return ['.'];
 	}
 
 	const allKeys = Object.keys(exportsField).filter(
@@ -42,14 +40,11 @@ async function resolveExports(pkg: string): Promise<ExportRow[]> {
 	const namedKeys = allKeys.filter((k) => !k.includes('*'));
 
 	if (wildcardKeys.length === 0) {
-		// All exports are explicitly named — simple case
-		return namedKeys
-			.map((k) => toRow(pkg, k))
-			.sort((a, b) => (a.key === '.' ? -1 : b.key === '.' ? 1 : a.key.localeCompare(b.key)));
+		return namedKeys.sort((a, b) => (a === '.' ? -1 : b === '.' ? 1 : a.localeCompare(b)));
 	}
 
 	// Has wildcard patterns — discover actual files via unpkg
-	let discovered: ExportRow[] = [];
+	const discovered: string[] = [];
 	try {
 		const metaRes = await fetch(`https://unpkg.com/${pkg}/?meta`);
 		if (metaRes.ok) {
@@ -62,12 +57,12 @@ async function resolveExports(pkg: string): Promise<ExportRow[]> {
 			);
 
 			for (const file of jsFiles) {
-				const stem = file.slice(1).replace(/\.(m)?js$/, ''); // "middleware.js" → "middleware"
+				const stem = file.slice(1).replace(/\.(m)?js$/, '');
 				if (stem === 'index') continue;
 				const exportKey = `./${stem}`;
 				if (namedKeys.includes(exportKey)) continue;
 				if (wildcardKeys.some((p) => matchesWildcard(exportKey, p))) {
-					discovered.push(toRow(pkg, exportKey));
+					discovered.push(exportKey);
 				}
 			}
 		}
@@ -75,34 +70,39 @@ async function resolveExports(pkg: string): Promise<ExportRow[]> {
 		// fallback to named only
 	}
 
-	return [...namedKeys.map((k) => toRow(pkg, k)), ...discovered].sort((a, b) =>
-		a.key === '.' ? -1 : b.key === '.' ? 1 : a.key.localeCompare(b.key),
+	return [...namedKeys, ...discovered].sort((a, b) =>
+		a === '.' ? -1 : b === '.' ? 1 : a.localeCompare(b),
 	);
 }
 
 interface Props {
 	pkg: string;
+	cdn: string;
 	onLoading: (v: boolean) => void;
 }
 
 export function ExportsTable(props: Props) {
-	const [rows, setRows] = createSignal<ExportRow[]>([]);
+	const [exportKeys, setExportKeys] = createSignal<string[]>([]);
 	const [error, setError] = createSignal<string | null>(null);
 	const [copyState, setCopyState] = createSignal<Record<string, string>>({});
 
 	const domain = window.location.origin;
 
+	// Re-fetch export keys only when the package changes
 	createEffect(() => {
 		const pkg = props.pkg;
 		if (!pkg) return;
 		setError(null);
-		setRows([]);
+		setExportKeys([]);
 		props.onLoading(true);
 		resolveExports(pkg)
-			.then(setRows)
+			.then((rows) => setExportKeys(rows.map((r) => r.key)))
 			.catch((e) => setError(e instanceof Error ? e.message : 'Failed to load package info'))
 			.finally(() => props.onLoading(false));
 	});
+
+	// Derive rows from keys + cdn (no fetch needed when cdn changes)
+	const rows = () => exportKeys().map((k) => toRow(props.pkg, k, props.cdn));
 
 	async function copy(path: string) {
 		const url = `${domain}${path}`;
