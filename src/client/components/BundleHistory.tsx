@@ -1,4 +1,4 @@
-import { batch, createEffect, createSignal, For, Show } from 'solid-js';
+import { batch, createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import styles from './BundleHistory.module.css';
 
 interface VersionData {
@@ -84,7 +84,10 @@ export function BundleHistory(props: Props) {
 		}
 	}
 
-	// Reset and re-analyze when pkg changes
+	// Auto-load on mount
+	onMount(() => analyze());
+
+	// Reset when pkg changes
 	createEffect(() => {
 		const _ = props.pkg;
 		batch(() => {

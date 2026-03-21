@@ -54,12 +54,13 @@
 	padding: 0.35rem 0.5rem 0.35rem 0;
 	white-space: nowrap;
 	vertical-align: middle;
+}
 
-	img {
-		display: inline-block;
-		height: 20px;
-		width: auto;
-	}
+.badgeImg {
+	display: inline-block !important;
+	height: 20px !important;
+	width: auto !important;
+	max-width: none !important;
 }
 
 .urlCell {

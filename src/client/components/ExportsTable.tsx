@@ -73,7 +73,7 @@ export function ExportsTable(props: Props) {
 							{(row) => (
 								<tr class={styles.row}>
 									<td class={styles.badgeCell}>
-										<img src={`${domain}${row.badgePath}`} alt={row.key} />
+										<img src={`${domain}${row.badgePath}`} class={styles.badgeImg} alt={row.key} />
 									</td>
 									<td class={styles.urlCell}>
 										<code class={styles.url}>{`${domain}${row.badgePath}`}</code>
