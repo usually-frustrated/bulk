@@ -14,12 +14,12 @@ export function Footer() {
 				</div>
 			</div>
 			<div class={styles.links}>
-				<a href="https://github.com/sushruth/bulk" target="_blank" rel="noopener noreferrer">
+				<a href="https://github.com/usually-frustrated/bulk" target="_blank" rel="noopener noreferrer">
 					github
 				</a>
 				<span aria-hidden="true">•</span>
-				<a href="https://github.com/sushruth" target="_blank" rel="noopener noreferrer">
-					@sushruth
+				<a href="https://github.com/usually-frustrated" target="_blank" rel="noopener noreferrer">
+					@usually-frustrated
 				</a>
 			</div>
 		</footer>
