@@ -4,13 +4,20 @@ import styles from './BundleHistory.module.css';
 interface VersionData {
 	version: string;
 	publishedAt: string;
-	bytes: number | null;
+	bytes_transfer: number | null;
+	bytes_raw: number | null;
 }
 
 interface HistoryData {
 	package: string;
 	export: string;
+	cdn: string;
 	versions: VersionData[];
+}
+
+/** Best available size — prefer transfer (compressed, what the browser downloads) */
+function bestBytes(v: VersionData): number | null {
+	return v.bytes_transfer ?? v.bytes_raw ?? null;
 }
 
 function fmtBytes(b: number): string {
@@ -74,13 +81,13 @@ export function BundleHistory() {
 	// ─── chart derivations ──────────────────────────────────────────────────
 
 	const versions = () => data()?.versions ?? [];
-	const maxBytes = () => Math.max(1, ...versions().flatMap((v) => (v.bytes != null ? [v.bytes] : [])));
+	const maxBytes = () => Math.max(1, ...versions().flatMap((v) => (bestBytes(v) != null ? [bestBytes(v)!] : [])));
 
 	const linePath = () => {
 		const vs = versions();
 		const mb = maxBytes();
 		const pts = vs
-			.map((v, i) => (v.bytes != null ? `${toX(i, vs.length).toFixed(1)},${toY(v.bytes, mb).toFixed(1)}` : null))
+			.map((v, i) => (bestBytes(v) != null ? `${toX(i, vs.length).toFixed(1)},${toY(bestBytes(v)!, mb).toFixed(1)}` : null))
 			.filter(Boolean) as string[];
 		return pts.length >= 2 ? 'M' + pts[0] + 'L' + pts.slice(1).join('L') : '';
 	};
@@ -89,7 +96,7 @@ export function BundleHistory() {
 		const vs = versions();
 		const mb = maxBytes();
 		const pts = vs
-			.map((v, i) => (v.bytes != null ? ([toX(i, vs.length), toY(v.bytes, mb)] as [number, number]) : null))
+			.map((v, i) => (bestBytes(v) != null ? ([toX(i, vs.length), toY(bestBytes(v)!, mb)] as [number, number]) : null))
 			.filter((p): p is [number, number] => p !== null);
 		if (pts.length < 2) return '';
 		const bottom = PY + PH;
@@ -123,7 +130,8 @@ export function BundleHistory() {
 		const vs = versions();
 		if (idx === null || idx >= vs.length) return null;
 		const v = vs[idx];
-		return { ...v, x: toX(idx, vs.length), y: v.bytes != null ? toY(v.bytes, maxBytes()) : null };
+		const b = bestBytes(v);
+		return { ...v, x: toX(idx, vs.length), y: b != null ? toY(b, maxBytes()) : null, bytes: b };
 	};
 
 	// ─── render ─────────────────────────────────────────────────────────────
@@ -205,10 +213,10 @@ export function BundleHistory() {
 
 						<For each={versions()}>
 							{(v, i) => (
-								<Show when={v.bytes != null}>
+								<Show when={bestBytes(v) != null}>
 									<circle
 										cx={toX(i(), versions().length)}
-										cy={toY(v.bytes!, maxBytes())}
+										cy={toY(bestBytes(v)!, maxBytes())}
 										r={4}
 										class={styles.point}
 										onMouseEnter={() => setHoveredIdx(i())}
@@ -250,7 +258,7 @@ export function BundleHistory() {
 											text-anchor="middle"
 											class={styles.tooltipBytes}
 										>
-											{fmtBytes(p.bytes!)}
+											{fmtBytes(p.bytes ?? 0)}
 										</text>
 									</g>
 								);
@@ -260,7 +268,7 @@ export function BundleHistory() {
 
 					<div class={styles.chartFooter}>
 						<span class={styles.statItem}>
-							{versions().filter((v) => v.bytes != null).length}&thinsp;/&thinsp;
+							{versions().filter((v) => bestBytes(v) != null).length}&thinsp;/&thinsp;
 							{versions().length} versions
 						</span>
 					</div>

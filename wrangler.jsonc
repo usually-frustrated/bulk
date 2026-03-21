@@ -17,15 +17,23 @@
 		"enabled": true,
 	},
 	/**
-	 * KV Namespace — CDN size cache + version resolution for @latest tags
-	 * Run: wrangler kv namespace create CACHE
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#kv-namespaces
+	 * D1 Database — all persistent state: cdn_sizes, package_exports,
+	 * package_versions, version_resolution.
+	 *
+	 * Setup:
+	 *   wrangler d1 create bulk-bundle
+	 *   # paste the database_id below
+	 *   wrangler d1 migrations apply bulk-bundle --remote
+	 *
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#d1-databases
 	 */
-	"kv_namespaces": [
+	"d1_databases": [
 		{
-			"binding": "CACHE",
-			// TODO: replace with real ID from: wrangler kv namespace create CACHE
-			"id": "00000000000000000000000000000000",
+			"binding": "DB",
+			"database_name": "bulk-bundle",
+			// TODO: replace with real ID from: wrangler d1 create bulk-bundle
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "./migrations",
 		},
 	],
 }

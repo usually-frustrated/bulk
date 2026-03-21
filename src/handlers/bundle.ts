@@ -1,35 +1,78 @@
 import type { Env } from '../types';
 import { parseBundlePath } from '../utils/bundle-parse';
+import { CDNS, DEFAULT_CDN, buildCdnUrl, measureSize } from '../utils/cdn';
+import type { CDN } from '../utils/cdn';
+import { resolveVersion, getPackageExports, getCachedSize, saveSize } from '../utils/db';
 
-async function resolveVersion(pkg: string, env: Env): Promise<string> {
-	const kvKey = `version:${pkg}:latest`;
-	const hit = await env.CACHE.get(kvKey);
-	if (hit) return hit;
+// ─── single export ───────────────────────────────────────────────────────────
 
-	const res = await fetch(`https://registry.npmjs.org/${pkg}/latest`, {
-		headers: { Accept: 'application/json' },
-	});
-	if (!res.ok) throw Object.assign(new Error(`Package not found: ${pkg}`), { status: 404 });
-
-	const { version } = (await res.json()) as { version: string };
-	await env.CACHE.put(kvKey, version, { expirationTtl: 3600 });
-	return version;
-}
-
-/** Fetch a module from esm.sh and measure its uncompressed byte size. */
-async function fetchSize(pkg: string, version: string, exportPath: string): Promise<number> {
-	const base = `https://esm.sh/${pkg}@${version}`;
-	const url = exportPath === 'index' ? base : `${base}/${exportPath}`;
-
-	const res = await fetch(url, { redirect: 'follow' });
-	if (!res.ok) {
-		throw Object.assign(new Error(`esm.sh returned ${res.status} for ${url}`), {
-			status: res.status === 404 ? 404 : 502,
-		});
+async function handleSingleExport(
+	request: Request,
+	env: Env,
+	ctx: ExecutionContext,
+	pkg: string,
+	version: string,
+	exportKey: string,
+	cdn: CDN,
+): Promise<Response> {
+	const cached = await getCachedSize(pkg, version, exportKey, cdn, env);
+	if (cached) {
+		return Response.json({ package: pkg, version, export: exportKey, cdn, ...cached });
 	}
 
-	return (await res.arrayBuffer()).byteLength;
+	const exports = await getPackageExports(pkg, version, env);
+	const entry = exports.find((e) => e.key === exportKey);
+	if (!entry) {
+		return new Response(`Export '${exportKey}' not found in ${pkg}@${version}`, { status: 404 });
+	}
+
+	const url = buildCdnUrl(pkg, version, exportKey, entry.path, cdn);
+	const size = await measureSize(url);
+
+	ctx.waitUntil(saveSize(pkg, version, exportKey, cdn, size, env));
+
+	return Response.json({ package: pkg, version, export: exportKey, cdn, ...size });
 }
+
+// ─── all exports (?exports) ──────────────────────────────────────────────────
+
+async function handleAllExports(
+	request: Request,
+	env: Env,
+	ctx: ExecutionContext,
+	pkg: string,
+	version: string,
+	cdn: CDN,
+): Promise<Response> {
+	const exports = await getPackageExports(pkg, version, env);
+
+	const results = await Promise.all(
+		exports.map(async (entry) => {
+			const cached = await getCachedSize(pkg, version, entry.key, cdn, env);
+			if (cached) return { key: entry.key, ...cached };
+
+			const url = buildCdnUrl(pkg, version, entry.key, entry.path, cdn);
+			try {
+				const size = await measureSize(url);
+				ctx.waitUntil(saveSize(pkg, version, entry.key, cdn, size, env));
+				return { key: entry.key, ...size };
+			} catch {
+				return { key: entry.key, bytes_raw: null, bytes_transfer: null };
+			}
+		}),
+	);
+
+	// Sort by best available size, nulls last
+	results.sort((a, b) => {
+		const sa = a.bytes_transfer ?? a.bytes_raw ?? Infinity;
+		const sb = b.bytes_transfer ?? b.bytes_raw ?? Infinity;
+		return sa - sb;
+	});
+
+	return Response.json({ package: pkg, version, cdn, exports: results });
+}
+
+// ─── main handler ────────────────────────────────────────────────────────────
 
 export async function handleBundleRequest(
 	request: Request,
@@ -38,41 +81,35 @@ export async function handleBundleRequest(
 ): Promise<Response> {
 	if (request.method !== 'GET') return new Response('Method not allowed', { status: 405 });
 
-	const parsed = parseBundlePath(new URL(request.url).pathname);
+	const url = new URL(request.url);
+	const parsed = parseBundlePath(url.pathname);
 	if (!parsed) return new Response('Invalid bundle path', { status: 400 });
 
-	let { version } = parsed;
-	const { package: pkg, exportPath } = parsed;
+	const cdnParam = (url.searchParams.get('cdn') ?? DEFAULT_CDN) as CDN;
+	if (!CDNS.includes(cdnParam)) {
+		return new Response(`Unknown CDN. Valid values: ${CDNS.join(', ')}`, { status: 400 });
+	}
 
+	let { version } = parsed;
 	try {
-		if (version === 'latest') version = await resolveVersion(pkg, env);
+		if (version === 'latest') version = await resolveVersion(parsed.package, env);
 	} catch (err: unknown) {
 		const status = (err as { status?: number }).status ?? 502;
 		return new Response(err instanceof Error ? err.message : 'Version resolution failed', { status });
 	}
 
-	// KV cache — versioned results are immutable so we store them indefinitely
-	const cacheKey = `bundle:${pkg}@${version}:${exportPath}`;
-	const hit = await env.CACHE.get(cacheKey);
-	if (hit) {
-		return Response.json(
-			{ package: pkg, version, export: exportPath, bytes: parseInt(hit, 10), cdn: 'esm.sh' },
-			{ headers: { 'Cache-Control': 'public, max-age=31536000, immutable' } },
-		);
-	}
+	const pkg = parsed.package;
+	const wantsAllExports = url.searchParams.has('exports');
 
-	let bytes: number;
 	try {
-		bytes = await fetchSize(pkg, version, exportPath);
+		if (wantsAllExports) {
+			return await handleAllExports(request, env, ctx, pkg, version, cdnParam);
+		}
+
+		const exportKey = parsed.exportPath ?? 'index';
+		return await handleSingleExport(request, env, ctx, pkg, version, exportKey, cdnParam);
 	} catch (err: unknown) {
 		const status = (err as { status?: number }).status ?? 502;
 		return new Response(err instanceof Error ? err.message : 'CDN fetch failed', { status });
 	}
-
-	ctx.waitUntil(env.CACHE.put(cacheKey, String(bytes)));
-
-	return Response.json(
-		{ package: pkg, version, export: exportPath, bytes, cdn: 'esm.sh' },
-		{ headers: { 'Cache-Control': 'public, max-age=31536000, immutable' } },
-	);
 }
