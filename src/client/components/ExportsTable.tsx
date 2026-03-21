@@ -6,16 +6,78 @@ interface ExportRow {
 	badgePath: string;
 }
 
-function exportsToRows(pkg: string, exportsField: Record<string, unknown> | string | null | undefined): ExportRow[] {
+function toRow(pkg: string, key: string): ExportRow {
+	return {
+		key,
+		badgePath: key === '.' ? `/${pkg}` : `/${pkg}/${key.replace(/^\.\//, '')}`,
+	};
+}
+
+function matchesWildcard(key: string, pattern: string): boolean {
+	if (!pattern.includes('*')) return key === pattern;
+	const [before, after] = pattern.split('*');
+	return key.startsWith(before) && key.endsWith(after) && key.length >= before.length + after.length;
+}
+
+function flatFiles(node: { type: string; path: string; files?: unknown[] }): string[] {
+	if (node.type === 'file') return [node.path];
+	return ((node.files ?? []) as typeof node[]).flatMap(flatFiles);
+}
+
+async function resolveExports(pkg: string): Promise<ExportRow[]> {
+	const pkgRes = await fetch(`https://registry.npmjs.org/${pkg}/latest`);
+	if (!pkgRes.ok) throw new Error(`Package "${pkg}" not found`);
+	const pkgData = await pkgRes.json();
+
+	const exportsField = pkgData.exports as Record<string, unknown> | string | null | undefined;
+
 	if (!exportsField || typeof exportsField === 'string') {
-		return [{ key: '.', badgePath: `/${pkg}` }];
+		return [toRow(pkg, '.')];
 	}
-	return Object.keys(exportsField)
-		.filter((k) => k.startsWith('.'))
-		.map((k) => ({
-			key: k,
-			badgePath: k === '.' ? `/${pkg}` : `/${pkg}/${k.replace(/^\.\//, '')}`,
-		}));
+
+	const allKeys = Object.keys(exportsField).filter(
+		(k) => k.startsWith('.') && !k.endsWith('package.json'),
+	);
+	const wildcardKeys = allKeys.filter((k) => k.includes('*'));
+	const namedKeys = allKeys.filter((k) => !k.includes('*'));
+
+	if (wildcardKeys.length === 0) {
+		// All exports are explicitly named — simple case
+		return namedKeys
+			.map((k) => toRow(pkg, k))
+			.sort((a, b) => (a.key === '.' ? -1 : b.key === '.' ? 1 : a.key.localeCompare(b.key)));
+	}
+
+	// Has wildcard patterns — discover actual files via unpkg
+	let discovered: ExportRow[] = [];
+	try {
+		const metaRes = await fetch(`https://unpkg.com/${pkg}/?meta`);
+		if (metaRes.ok) {
+			const meta = await metaRes.json();
+			const skipDirs = ['/esm/', '/cjs/', '/dist/', '/src/', '/umd/', '/lib/', '/.'];
+			const jsFiles = flatFiles(meta).filter(
+				(f) =>
+					(f.endsWith('.js') || f.endsWith('.mjs')) &&
+					!skipDirs.some((d) => f.includes(d)),
+			);
+
+			for (const file of jsFiles) {
+				const stem = file.slice(1).replace(/\.(m)?js$/, ''); // "middleware.js" → "middleware"
+				if (stem === 'index') continue;
+				const exportKey = `./${stem}`;
+				if (namedKeys.includes(exportKey)) continue;
+				if (wildcardKeys.some((p) => matchesWildcard(exportKey, p))) {
+					discovered.push(toRow(pkg, exportKey));
+				}
+			}
+		}
+	} catch {
+		// fallback to named only
+	}
+
+	return [...namedKeys.map((k) => toRow(pkg, k)), ...discovered].sort((a, b) =>
+		a.key === '.' ? -1 : b.key === '.' ? 1 : a.key.localeCompare(b.key),
+	);
 }
 
 interface Props {
@@ -30,25 +92,16 @@ export function ExportsTable(props: Props) {
 
 	const domain = window.location.origin;
 
-	async function load(pkg: string) {
+	createEffect(() => {
+		const pkg = props.pkg;
 		if (!pkg) return;
-		props.onLoading(true);
 		setError(null);
 		setRows([]);
-		try {
-			const res = await fetch(`https://registry.npmjs.org/${pkg}/latest`);
-			if (!res.ok) throw new Error(`Package "${pkg}" not found`);
-			const data = await res.json();
-			setRows(exportsToRows(pkg, data.exports));
-		} catch (e) {
-			setError(e instanceof Error ? e.message : 'Failed to load package info');
-		} finally {
-			props.onLoading(false);
-		}
-	}
-
-	createEffect(() => {
-		load(props.pkg);
+		props.onLoading(true);
+		resolveExports(pkg)
+			.then(setRows)
+			.catch((e) => setError(e instanceof Error ? e.message : 'Failed to load package info'))
+			.finally(() => props.onLoading(false));
 	});
 
 	async function copy(path: string) {
