@@ -1,0 +1,41 @@
+.pkgInputWrap {
+	padding: var(--spacing-section-block);
+	text-align: left;
+	margin-bottom: var(--spacing-section-gap);
+}
+
+.pkgLabel {
+	display: block;
+	font-size: var(--font-size-label);
+	color: var(--color-text-muted);
+	margin-bottom: var(--spacing-label-bottom);
+}
+
+.pkgInput {
+	width: 100%;
+	padding: var(--spacing-input-block) var(--spacing-input-inline);
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-input);
+	color: var(--color-text);
+	background: var(--color-bg);
+	border: 1px solid var(--color-border);
+	border-radius: 4px;
+	outline: none;
+	transition: border-color 0.2s;
+	box-sizing: border-box;
+
+	&:focus {
+		border-color: var(--color-accent);
+	}
+}
+
+@media (max-width: 480px) {
+	.pkgLabel {
+		font-size: var(--font-size-label-mobile);
+	}
+
+	.pkgInput {
+		font-size: var(--font-size-input-mobile);
+		padding: var(--spacing-input-block-mobile) var(--spacing-input-inline-mobile);
+	}
+}

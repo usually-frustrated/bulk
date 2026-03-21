@@ -4,6 +4,18 @@
 	letter-spacing: -0.02em;
 	margin-bottom: var(--spacing-heading-bottom);
 	color: var(--color-text);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.35em;
+}
+
+.logo {
+	display: inline-block;
+	width: 1em;
+	height: 1em;
+	vertical-align: middle;
+	border-radius: 0.18em;
 }
 
 .tagline {

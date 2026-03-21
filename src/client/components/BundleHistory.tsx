@@ -1,4 +1,4 @@
-import { batch, createSignal, For, Show } from 'solid-js';
+import { batch, createEffect, createSignal, For, Show } from 'solid-js';
 import styles from './BundleHistory.module.css';
 
 interface VersionData {
@@ -47,16 +47,20 @@ function toY(bytes: number, maxBytes: number): number {
 
 // ─── component ──────────────────────────────────────────────────────────────
 
-export function BundleHistory() {
-	const [pkgInput, setPkgInput] = createSignal('');
-	const [exportInput, setExportInput] = createSignal('');
+interface Props {
+	pkg: string;
+	onLoading: (v: boolean) => void;
+}
+
+export function BundleHistory(props: Props) {
+	const [exportInput, setExportInput] = createSignal('index');
 	const [data, setData] = createSignal<HistoryData | null>(null);
 	const [loading, setLoading] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
 	const [hoveredIdx, setHoveredIdx] = createSignal<number | null>(null);
 
 	async function analyze() {
-		const pkg = pkgInput().trim();
+		const pkg = props.pkg.trim();
 		if (!pkg) return;
 		const exp = exportInput().trim() || 'index';
 
@@ -66,6 +70,7 @@ export function BundleHistory() {
 			setData(null);
 			setHoveredIdx(null);
 		});
+		props.onLoading(true);
 
 		try {
 			const res = await fetch(`/_bundle-history/${pkg}/${exp}`);
@@ -75,8 +80,19 @@ export function BundleHistory() {
 			setError(err instanceof Error ? err.message : 'Failed to load history');
 		} finally {
 			setLoading(false);
+			props.onLoading(false);
 		}
 	}
+
+	// Reset and re-analyze when pkg changes
+	createEffect(() => {
+		const _ = props.pkg;
+		batch(() => {
+			setData(null);
+			setError(null);
+			setHoveredIdx(null);
+		});
+	});
 
 	// ─── chart derivations ──────────────────────────────────────────────────
 
@@ -141,14 +157,6 @@ export function BundleHistory() {
 			<label class={styles.sectionLabel}>Bundle size history</label>
 
 			<div class={styles.inputRow}>
-				<input
-					type="text"
-					class={styles.inputPkg}
-					placeholder="package (e.g., react)"
-					value={pkgInput()}
-					onInput={(e) => setPkgInput(e.currentTarget.value)}
-					onKeyDown={(e) => e.key === 'Enter' && analyze()}
-				/>
 				<input
 					type="text"
 					class={styles.inputExport}
