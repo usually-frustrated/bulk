@@ -29,6 +29,7 @@ interface MeasurementResult {
   cdn: string;
   browser: string;
   connection: string;
+  version: string;
   resources: ResourceTiming[];
 }
 
@@ -112,6 +113,9 @@ export function MeasurementView(props: { pkg: string }) {
       );
       
       setMeasurementResults(results);
+      
+      // Post measurements to server with version tracking
+      await postMeasurement(results);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to measure exports');
     } finally {
@@ -122,6 +126,22 @@ export function MeasurementView(props: { pkg: string }) {
   // Post measurement results to server
   const postMeasurement = async (results: any) => {
     try {
+      // Get the current version of the site (this would be injected at build time)
+      const siteVersion = 'v1.0.0'; // In a real app, this would come from build environment
+      
+      // Collect all resources from the results for storage
+      const allResources: ResourceTiming[] = [];
+      
+      // Flatten all resources from all exports and CDNs
+      for (const cdn in results) {
+        for (const exportKey in results[cdn]) {
+          const exportResult = results[cdn][exportKey];
+          if (exportResult.resources && Array.isArray(exportResult.resources)) {
+            allResources.push(...exportResult.resources);
+          }
+        }
+      }
+      
       const response = await fetch('/_record', {
         method: 'POST',
         headers: {
@@ -132,7 +152,8 @@ export function MeasurementView(props: { pkg: string }) {
           cdn: 'jsdelivr', // Placeholder
           browser: navigator.userAgent,
           connection: 'unknown', // Would use navigator.connection.effectiveType in real implementation
-          resources: [] // Would populate with actual resource data
+          version: siteVersion,
+          resources: allResources
         })
       });
       
@@ -140,7 +161,236 @@ export function MeasurementView(props: { pkg: string }) {
         throw new Error(`Failed to record measurement: ${response.status}`);
       }
       
-      console.log('Measurement recorded successfully');
+      console.log('Measurement recorded successfully with version tracking');
+    } catch (err) {
+      console.error('Failed to record measurement:', err);
+    }
+  };
+
+  return (
+    <div class={styles.measurementView}>
+      {loading() && <div>Loading package exports...</div>}
+      {error() && <div class="error">Error: {error()}</div>}
+      
+      {discoverData() && (
+        <div>
+          <h3>Exports for {discoverData()?.package}@{discoverData()?.version}</h3>
+          <p>{discoverData()?.exports.length} exports found</p>
+          
+          <div class={styles.actions}>
+            <button onClick={measureExports} disabled={measuring()}>
+              {measuring() ? 'Measuring...' : 'Measure All Exports'}
+            </button>
+          </div>
+          
+          {measurementResults() && (
+            <div class={styles.results}>
+              <h4>Measurement Results</h4>
+              <div class={styles.summaryTable}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Export</th>
+                      <th>jsDelivr</th>
+                      <th>unpkg</th>
+                      <th>esm.sh</th>
+                      <th>Best CDN</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {discoverData()?.exports.map((exp) => {
+                      const results = measurementResults()!;
+                      const jsdelivrResult = results.jsdelivr?.[exp.key];
+                      const unpkgResult = results.unpkg?.[exp.key];
+                      const esmshResult = results.esmsh?.[exp.key];
+                      
+                      return (
+                        <tr>
+                          <td>{exp.key}</td>
+                          <td>{jsdelivrResult ? `${(jsdelivrResult.wireSize/1024).toFixed(1)} kB (${jsdelivrResult.fileCount} files)` : '-'}</td>
+                          <td>{unpkgResult ? `${(unpkgResult.wireSize/1024).toFixed(1)} kB (${unpkgResult.fileCount} files)` : '-'}</td>
+                          <td>{esmshResult ? `${(esmshResult.wireSize/1024).toFixed(1)} kB (${esmshResult.fileCount} files)` : '-'}</td>
+                          <td>{jsdelivrResult ? 'jsDelivr' : unpkgResult ? 'unpkg' : esmshResult ? 'esm.sh' : '-'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              
+              <div class={styles.waterfallChart}>
+                <h4>Waterfall Visualization</h4>
+                <p>Click on an export to see detailed waterfall breakdown</p>
+              </div>
+            </div>
+          )}
+          
+          <div class={styles.importmapOutput}>
+            <h4>Import Map</h4>
+            <pre>{`{
+  "${discoverData()?.package}": "https://cdn.jsdelivr.net/npm/${discoverData()?.package}@${discoverData()?.version}/+esm"
+}`}</pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface DiscoverResult {
+  package: string;
+  version: string;
+  exports: ExportEntry[];
+  wildcardResolved: boolean;
+}
+
+interface ResourceTiming {
+  url: string;
+  transferSize: number | null;
+  decodedBodySize: number | null;
+  startTime: number;
+  responseEnd: number;
+  initiatorType: string;
+}
+
+interface MeasurementResult {
+  packages: string[];
+  cdn: string;
+  browser: string;
+  connection: string;
+  version: string;
+  resources: ResourceTiming[];
+}
+
+// CDN configuration for measurement
+const CDN_CONFIGS = {
+  jsdelivr: {
+    baseUrl: 'https://cdn.jsdelivr.net/npm/',
+    suffix: '+esm'
+  },
+  unpkg: {
+    baseUrl: 'https://unpkg.com/',
+    suffix: ''
+  },
+  esmsh: {
+    baseUrl: 'https://esm.sh/',
+    suffix: ''
+  }
+};
+
+export function MeasurementView(props: { pkg: string }) {
+  const [discoverData, setDiscoverData] = createSignal<DiscoverResult | null>(null);
+  const [measurementResults, setMeasurementResults] = createSignal<Record<string, any> | null>(null);
+  const [error, setError] = createSignal<string | null>(null);
+  const [loading, setLoading] = createSignal(false);
+  const [measuring, setMeasuring] = createSignal(false);
+  const [iframeLoaded, setIframeLoaded] = createSignal(false);
+
+  const fetchDiscoverData = async () => {
+    if (!props.pkg.trim()) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch(`/_discover/${encodeURIComponent(props.pkg)}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+      }
+      
+      const data: DiscoverResult = await response.json();
+      setDiscoverData(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch package data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch data when package changes
+  onMount(() => {
+    fetchDiscoverData();
+  });
+
+  // Helper to build CDN URLs
+  const buildCdnUrl = (pkg: string, version: string, exportKey: string, cdn: string): string => {
+    const config = CDN_CONFIGS[cdn as keyof typeof CDN_CONFIGS];
+    if (!config) return '';
+    
+    const isRoot = exportKey === 'index';
+    const subpath = isRoot ? '' : `/${exportKey}`;
+    const suffix = isRoot && cdn === 'jsdelivr' ? '/+esm' : config.suffix;
+    
+    return `${config.baseUrl}${pkg}@${version}${subpath}${suffix}`;
+  };
+
+  // Measure exports across CDNs
+  const measureExports = async () => {
+    if (!discoverData()) return;
+    
+    setMeasuring(true);
+    setError(null);
+    
+    try {
+      // Use the new iframe-based measurement function
+      const cdns = ['jsdelivr', 'unpkg', 'esmsh'];
+      const results = await measureAllExports(
+        discoverData()!.package,
+        discoverData()!.version,
+        discoverData()!.exports,
+        cdns
+      );
+      
+      setMeasurementResults(results);
+      
+      // Post measurements to server with version tracking
+      await postMeasurement(results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to measure exports');
+    } finally {
+      setMeasuring(false);
+    }
+  };
+
+  // Post measurement results to server
+  const postMeasurement = async (results: any) => {
+    try {
+      // Get the current version of the site (this would be injected at build time)
+      const siteVersion = 'v1.0.0'; // In a real app, this would be from environment/build info
+      
+      // Collect all resources from the results for storage
+      const allResources: ResourceTiming[] = [];
+      
+      // Flatten all resources from all exports and CDNs
+      for (const cdn in results) {
+        for (const exportKey in results[cdn]) {
+          const exportResult = results[cdn][exportKey];
+          if (exportResult.resources && Array.isArray(exportResult.resources)) {
+            allResources.push(...exportResult.resources);
+          }
+        }
+      }
+      
+      const response = await fetch('/_record', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          packages: [discoverData()?.package],
+          cdn: 'jsdelivr', // Placeholder
+          browser: navigator.userAgent,
+          connection: 'unknown', // Would use navigator.connection.effectiveType in real implementation
+          version: siteVersion,
+          resources: allResources
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to record measurement: ${response.status}`);
+      }
+      
+      console.log('Measurement recorded successfully with version tracking');
     } catch (err) {
       console.error('Failed to record measurement:', err);
     }

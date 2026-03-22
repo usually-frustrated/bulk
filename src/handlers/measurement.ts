@@ -17,6 +17,7 @@ export interface MeasurementResult {
   cdn: string;
   browser: string;
   connection: string;
+  version: string; // Track which version of the site created this data
   resources: ResourceTiming[];
 }
 
@@ -51,6 +52,10 @@ export async function handleRecordRequest(
       return new Response('Invalid connection string', { status: 400 });
     }
     
+    if (!body.version || typeof body.version !== 'string') {
+      return new Response('Invalid version string', { status: 400 });
+    }
+    
     if (!body.resources || !Array.isArray(body.resources)) {
       return new Response('Invalid resources array', { status: 400 });
     }
@@ -67,14 +72,15 @@ export async function handleRecordRequest(
     // In a real implementation, you would do something like:
     /*
     await env.DB.prepare(
-      `INSERT INTO measurements (package, cdn, browser, connection, resources, timestamp) 
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO measurements (package, cdn, browser, connection, version, resources, timestamp) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       body.packages[0], 
       body.cdn, 
       body.browser, 
-      body.connection, 
+      body.connection,
+      body.version,
       JSON.stringify(body.resources),
       new Date().toISOString()
     )
