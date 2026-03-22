@@ -2,6 +2,7 @@ import type { Env } from './types';
 import { handleBadgeRequest } from './handlers/badge';
 import { handleBundleRequest } from './handlers/bundle';
 import { handleBundleHistory } from './handlers/bundle-history';
+import { handleDiscoverRequest } from './handlers/discover';
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -9,6 +10,10 @@ export default {
 
 		if (pathname === '/favicon.ico') {
 			return new Response('Not found', { status: 404 });
+		}
+
+		if (pathname.startsWith('/_discover/')) {
+			return handleDiscoverRequest(request, env, ctx);
 		}
 
 		if (pathname.startsWith('/_bundle-history/')) {

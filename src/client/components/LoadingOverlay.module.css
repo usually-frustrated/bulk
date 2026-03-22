@@ -23,3 +23,16 @@
 		font-size: var(--font-size-heading-mobile);
 	}
 }
+
+.content {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+}
+
+.progress {
+	font-size: 13px;
+	color: var(--color-text-muted);
+	font-variant-numeric: tabular-nums;
+}

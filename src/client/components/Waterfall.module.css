@@ -1,0 +1,158 @@
+.container {
+	margin-top: var(--spacing-section-md);
+	padding: var(--spacing-section-md);
+	background: var(--color-bg);
+	border: 1px solid var(--color-border);
+	border-radius: 8px;
+}
+
+.header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: var(--spacing-section-md);
+	padding-bottom: var(--spacing-section-sm);
+	border-bottom: 1px solid var(--color-border-light);
+}
+
+.title {
+	font-size: 18px;
+	font-weight: 600;
+	color: var(--color-text);
+	margin: 0;
+}
+
+.summary {
+	display: flex;
+	gap: 24px;
+}
+
+.stat {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+}
+
+.statValue {
+	font-size: 18px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.statLabel {
+	font-size: 11px;
+	color: var(--color-text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.waterfall {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-section-md);
+}
+
+.round {
+	background: var(--color-grid);
+	border-radius: 6px;
+	padding: 12px;
+}
+
+.roundHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--color-border-light);
+}
+
+.roundNumber {
+	font-weight: 600;
+	font-size: 13px;
+	color: var(--color-text);
+}
+
+.roundFiles {
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+
+.roundFilesList {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.file {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 8px 12px;
+	background: var(--color-bg);
+	border-radius: 4px;
+}
+
+.fileInfo {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	flex: 1;
+	min-width: 0;
+}
+
+.fileName {
+	font-family: var(--font-mono, monospace);
+	font-size: 12px;
+	color: var(--color-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.fileUrl {
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+
+.fileStats {
+	display: flex;
+	gap: 16px;
+	align-items: center;
+}
+
+.fileSize {
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--color-text);
+}
+
+.fileTime {
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+
+.importmap {
+	margin-top: var(--spacing-section-md);
+	padding-top: var(--spacing-section-md);
+	border-top: 1px solid var(--color-border-light);
+}
+
+.importmap h4 {
+	margin: 0 0 8px 0;
+	font-size: 13px;
+	color: var(--color-text-muted);
+}
+
+.importCode {
+	display: block;
+	padding: 12px;
+	background: var(--color-grid);
+	border-radius: 4px;
+	font-family: var(--font-mono, monospace);
+	font-size: 12px;
+	color: var(--color-text);
+	overflow-x: auto;
+	word-break: break-all;
+}
