@@ -114,7 +114,7 @@ export function MeasurementView(props: { pkg: string }) {
   return (
     <div class={styles.measurementView}>
       {loading() && <div>Loading package exports...</div>}
-      {error() && <div class="error">Error: {error()}</div>}
+      {error() && <div class={styles.error}>Error: {error()}</div>}
       
       {discoverData() && (
         <div>
