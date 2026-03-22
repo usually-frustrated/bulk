@@ -248,7 +248,85 @@ The wildcard case disappears as a special case. The browser resolves it naturall
 
 ---
 
-## 9. open technical questions before building
+## 9. module format diversity — "how many script tags" is not the wrong question
+
+The earlier framing ("importmap is the answer, script tags are the wrong question") was too narrow. Externalization happens in multiple formats, and each has a completely different cost model. bulk should be inclusive of all of them.
+
+### the formats
+
+**UMD / IIFE — `<script src="...">` + global variable**
+
+The classic CDN approach. No importmap, no module system required. Works in any browser, any era.
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+```
+
+Bundler config:
+```js
+externals: { 'react': 'React', 'react-dom': 'ReactDOM' }
+```
+
+For UMD, "how many script tags" is *exactly* the right question. Key facts verified:
+
+| package | UMD available? | size | depends on global |
+|---|---|---|---|
+| react@18.3.1 | ✅ | 10,751 bytes | none |
+| react-dom@18.3.1 | ✅ | 131,835 bytes | `window.React` |
+| redux@5.0.1 | ✅ (dist/redux.min.js) | — | none |
+| @reduxjs/toolkit@2.11.2 | ❌ no UMD in dist | — | — |
+| zustand@5.0.12 | ❌ no UMD at all | — | — |
+
+**RTK and zustand cannot be externalised via script tags.** They ship ESM + CJS only. If a developer tries to follow the "add a script tag from a CDN" pattern, it doesn't exist for these packages. This is something bulk could surface immediately and clearly rather than silently returning wrong data.
+
+Script tag ordering is a hard constraint for UMD: each file depends on globals set by previous files. `react-dom` must come after `react` because it calls `window.React`. The "waterfall" for UMD is not network-parallel — it's sequential by definition (browsers execute `<script>` tags in DOM order, each synchronously blocks the next). The cost model is completely different from ESM module graphs.
+
+**ESM via importmap**
+
+Covered extensively above. Multiple files, parallel fetches within a level, importmap needed for bare specifiers, transitive peer deps must be covered.
+
+**ESM via explicit URLs in source**
+
+```js
+import { create } from 'https://esm.sh/zustand@5.0.12/react'
+```
+
+No importmap needed. The URL is hardcoded in source. This works but couples source code to a specific CDN and version URL. Less common in production apps, but used in quick prototypes and Deno/browser-native contexts. The waterfall cost is identical to importmap ESM — the resolution mechanism just differs.
+
+**CJS (Node.js / SSR)**
+
+`require('react')` — not for the browser directly, but relevant for SSR contexts (Next.js pages, Remix loaders, etc.) where you might want to externalize from a server bundle. Different CDN story: you'd use a package registry or a dedicated server-side CDN, not jsDelivr/esm.sh. Out of scope for the browser lab, but relevant for CLI/API consumers of bulk.
+
+**AMD (RequireJS)**
+
+Legacy. Still exists in enterprise apps. `define(['react'], function(React) {...})`. CDNs serve the raw files; AMD loader resolves them. Effectively a script-tag model with a runtime loader on top. Not a priority but "how many script tags" still applies.
+
+### what this means for bulk's UI
+
+The entry point question should be: **what format are you targeting?**
+
+- **Script tags (UMD/IIFE)**: show which packages have UMD builds, their sizes, required load order, the global variable names, and explicit warning when a package has no UMD build
+- **ESM importmap**: show the waterfall, importmap JSON, total files + sizes
+- **ESM explicit URL**: same output as importmap but formatted as `import` statements
+- **Node.js externals**: different surface, lower priority
+
+Bulk should not assume ESM-first. A developer targeting legacy browser support or using a pre-ESM build pipeline may specifically need UMD. The "cost" question is just as real for them — and the answer (sequential script tags, global variable conflicts, no tree-shaking ever) is actually harder to find than the ESM answer.
+
+### the browser lab still applies to UMD
+
+UMD files loaded via `<script>` appear in `PerformanceResourceTiming` with `initiatorType: 'script'`. The browser records them too. A UMD waterfall would show:
+
+```
+Round 1  (0 ms)     react.production.min.js     10 kB   (blocking)
+Round 2  (+12 ms)   react-dom.production.min.js 132 kB  (blocking, waits for round 1)
+```
+
+Sequential by necessity — that IS the UMD cost model. The measurement approach stays the same; only the load mechanism and output format change.
+
+---
+
+## 10. open technical questions before building
 
 **`Timing-Allow-Origin`**: `PerformanceResourceTiming` only gives `transferSize`/`decodedBodySize` for cross-origin resources if the CDN sends `Timing-Allow-Origin: *`. jsDelivr sends it. esm.sh needs verification. Without it: we still get URLs and timing, but not byte sizes. Fallback: proxy through our Worker (adds TAO headers) — acceptable for size measurement, distorts latency.
 
@@ -260,7 +338,7 @@ The wildcard case disappears as a special case. The browser resolves it naturall
 
 ---
 
-## 10. what stays the same
+## 11. what stays the same
 
 - Cloudflare Workers + D1 + Wrangler — infra stays
 - SolidJS client — stays
@@ -272,7 +350,7 @@ The wildcard case disappears as a special case. The browser resolves it naturall
 
 ---
 
-## 11. what the new write endpoint looks like
+## 12. what the new write endpoint looks like
 
 ```
 POST /_record
@@ -299,7 +377,7 @@ Server stores in D1, aggregates over time. Badges and history charts read from a
 
 ---
 
-## 12. north star
+## 13. north star
 
 > **bulk answers the question "what will it cost my users if I externalise this library?" with real browser data, not server-side guesses.**
 
