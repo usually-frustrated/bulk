@@ -5,6 +5,7 @@ import { SolidPlugin } from '@dschz/bun-plugin-solid';
 const clientDir = join(import.meta.dir, 'src', 'client');
 const outDir = join(import.meta.dir, 'public');
 
+// Only remove if it exists
 if (existsSync(outDir)) {
 	rmSync(outDir, { recursive: true });
 }
