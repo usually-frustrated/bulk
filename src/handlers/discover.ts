@@ -79,10 +79,11 @@ export async function handleDiscoverRequest(
     }
     
     // Get package metadata from npm registry
-    const metadata = await fetchPackageMetadata(pkg, version);
-    
-    // Get exports from package.json
-    const pkgJson = metadata.versions[version] || metadata;
+    // /<pkg>/latest (and any dist-tag) returns the package.json directly.
+    // /<pkg>/<semver> also returns it directly. There is no wrapper with a
+    // `versions` map — that only exists on the full registry document (no version).
+    const pkgJson = await fetchPackageMetadata(pkg, version);
+    const resolvedVersion: string = pkgJson.version ?? version;
     const exports = parseExports(pkgJson);
     
     // Handle wildcard exports by extracting files from tarball
@@ -90,7 +91,7 @@ export async function handleDiscoverRequest(
     const resolvedWildcardExports: string[] = [];
     
     if (wildcardExports.length > 0) {
-      const files = await extractTarballFiles(pkg, version);
+      const files = await extractTarballFiles(pkg, resolvedVersion);
       // For wildcard exports, we generate all possible paths based on file extensions
       for (const exportEntry of wildcardExports) {
         const baseKey = exportEntry.key.replace('/*', '');
@@ -114,7 +115,7 @@ export async function handleDiscoverRequest(
 
     return Response.json({
       package: pkg,
-      version,
+      version: resolvedVersion,
       exports: allExports,
       wildcardResolved: resolvedWildcardExports.length > 0
     });
