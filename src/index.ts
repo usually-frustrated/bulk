@@ -2,6 +2,8 @@ import type { Env } from './types';
 import { handleBadgeRequest } from './handlers/badge';
 import { handleBundleRequest } from './handlers/bundle';
 import { handleBundleHistory } from './handlers/bundle-history';
+import { handleDiscoverRequest } from './handlers/discover';
+import { handleRecordRequest } from './handlers/measurement';
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -17,6 +19,14 @@ export default {
 
 		if (pathname.startsWith('/_bundle/')) {
 			return handleBundleRequest(request, env, ctx);
+		}
+
+		if (pathname.startsWith('/_discover/')) {
+			return handleDiscoverRequest(request, env, ctx);
+		}
+
+		if (pathname === '/_record') {
+			return handleRecordRequest(request, env, ctx);
 		}
 
 		if (pathname.startsWith('/_/')) {
