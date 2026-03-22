@@ -1,0 +1,308 @@
+# bulk — proposed pivot
+> captured from design session, 2026-03-22
+
+---
+
+## 1. what bulk is today
+
+A Cloudflare Worker that generates SVG shield-style badges showing CDN file sizes for npm packages. A developer embeds `![](https://bulk.dev/react)` in their README and gets a badge like `jsDelivr size: 45 kB`.
+
+**How it measures today:**
+- `GET /react` → `HEAD https://cdn.jsdelivr.net/npm/react` → read `Content-Length` → render SVG
+- `GET /_bundle/react@18.3.1/jsx-runtime` → HEAD CDN export URL → size → JSON + D1 cache
+- `GET /_bundle-history/react` → fetch all versions, measure each, store in D1, return for chart
+
+**Tech stack:** CF Workers · SolidJS · Bun · TypeScript · D1 (SQLite) · Wrangler
+**Client:** SolidJS SPA — package input → exports table + badge URLs + version history SVG chart
+
+---
+
+## 2. the original questions that started this session
+
+> *"What will it cost me to make this library external?"*
+
+Reframed correctly: a developer working on a web app asks — if I move this npm dependency from being bundled by my build tool to being loaded via a `<script type="module">` / importmap from a CDN, **what does that actually cost my users?**
+
+Sub-questions:
+- What URL should I use to externalize this module?
+- Do I get a bundled or non-bundled file from this CDN?
+- What is the network waterfall? How many sequential round trips?
+- What is the total network download cost, parse size cost?
+- What are all the valid export paths for this package?
+- How many importmap entries do I need?
+
+---
+
+## 3. the fatal flaw we discovered
+
+We fact-checked the current measurements by making real HTTP requests. **The badge numbers are wrong.**
+
+### esm.sh root URL
+```
+HEAD https://esm.sh/react-dom@18.3.1
+→ content-length: 238
+→ x-esm-path: /react-dom@18.3.1/es2022/react-dom.mjs
+```
+The 238 bytes is a **re-export wrapper**:
+```js
+/* esm.sh - react-dom@18.3.1 */
+import "/react@18.3.1/es2022/react.mjs";
+import "/scheduler@^0.23.2?target=es2022";
+export * from "/react-dom@18.3.1/es2022/react-dom.mjs";
+export { default } from "/react-dom@18.3.1/es2022/react-dom.mjs";
+```
+Bulk shows `238 B` for react-dom on esm.sh. The actual download is ~140 kB+ across multiple files.
+
+### jsDelivr root URL (no `/+esm`)
+```
+HEAD https://cdn.jsdelivr.net/npm/react-dom@18.3.1
+→ content-length: 782
+→ module.exports = require("./cjs/react-dom.production.min.js")
+```
+**CJS code.** Won't execute in a browser `<script type="module">` without a module bundler. Bulk shows `782 B`. Meaningless.
+
+### esm.sh `?bundle` flag — also NOT a single file
+```
+esm.sh/react-dom@18.3.1?bundle
+→ 209 byte wrapper → react-dom.bundle.mjs (136 kB)
+   still imports: /react@18.3.1/es2022/react.mjs  ← separate request
+```
+Even `?bundle` does not produce a truly self-contained file. It inlines scheduler but keeps react as a separate ESM import.
+
+### jsDelivr `/+esm` — the real ESM entry
+```
+https://cdn.jsdelivr.net/npm/react-dom@18.3.1/+esm
+→ content-length: 132,539
+→ import e from"/npm/react@18.3.1/+esm";
+→ import n from"/npm/scheduler@0.23.2/+esm";
+```
+132 kB with its own waterfall to react + scheduler. Not what bulk measures at all.
+
+### conclusion
+The `/_bundle` endpoint has the same problem for root/index exports on esm.sh: `buildCdnUrl` for `isRoot` returns `https://esm.sh/${pkg}@${version}` — the 238-byte wrapper.
+
+**No CDN serves a truly self-contained single file by default for packages with peer deps. Both esm.sh and jsDelivr have waterfalls.**
+
+---
+
+## 4. the three export models
+
+Discovered by inspecting real packages:
+
+### model A — single root (redux)
+```json
+".": { "import": "./dist/redux.mjs" }
+```
+One URL. Simple. No subpaths.
+
+### model B — explicit named subpaths (@reduxjs/toolkit)
+```json
+".":             → dist/redux-toolkit.modern.mjs
+"./react":       → dist/react/redux-toolkit-react.modern.mjs
+"./query":       → dist/query/rtk-query.modern.mjs
+"./query/react": → dist/query/react/rtk-query-react.modern.mjs
+```
+Package author explicitly declares public subpath API. Enumerable. CDNs know how to route these.
+
+### model C — wildcard (zustand)
+```json
+"./*": { "import": "./esm/*.mjs" }
+```
+`zustand/middleware`, `zustand/react`, `zustand/vanilla`, `zustand/shallow`, etc. — all valid. Cannot be enumerated from exports field alone. Must either:
+- crawl the npm file listing (unpkg `/?meta` hack — returns every file, not just public API)
+- load what the user actually imports and let the browser report what resolved
+
+---
+
+## 5. the cross-subpath deduplication problem
+
+When your app uses **multiple subpaths of the same package**, CDNs may or may not deduplicate shared code.
+
+### jsDelivr — deduplicates by exact URL
+```
+@reduxjs/toolkit@2.11.2/+esm          (23 kB) ← your importmap entry
+  └─ imports redux, immer, reselect
+
+@reduxjs/toolkit@2.11.2/query/react/+esm (14 kB) ← your importmap entry
+  └─ imports @reduxjs/toolkit@2.11.2/+esm    ← SAME URL → browser fetches once
+  └─ imports react-redux
+       └─ imports react
+```
+jsDelivr's `@reduxjs/toolkit/+esm` is imported by `query/react/+esm` as the same URL → deduplicated.
+
+### esm.sh — wrapper URL ≠ .mjs URL → potential double-fetch
+```
+esm.sh/@reduxjs/toolkit              ← your importmap entry (wrapper, re-exports toolkit.mjs)
+esm.sh/@reduxjs/toolkit/query/react  ← your importmap entry (wrapper)
+  └─ imports /@reduxjs/toolkit@2.11.2/es2022/toolkit.mjs   ← DIFFERENT URL than wrapper above
+```
+The wrapper URL and the `.mjs` URL are distinct. Whether the browser deduplicates depends on load ordering and whether both chains resolve before either fires the fetch. **This is not theoretical — real apps can double-download in certain load orders on esm.sh.**
+
+---
+
+## 6. the correct question: importmap, not badge
+
+What a developer actually needs when externalising `@reduxjs/toolkit/query/react` is not a size badge. It's:
+
+```json
+{
+  "imports": {
+    "@reduxjs/toolkit":             "https://cdn.jsdelivr.net/npm/@reduxjs/toolkit@2.11.2/+esm",
+    "@reduxjs/toolkit/react":       "https://cdn.jsdelivr.net/npm/@reduxjs/toolkit@2.11.2/react/+esm",
+    "@reduxjs/toolkit/query":       "https://cdn.jsdelivr.net/npm/@reduxjs/toolkit@2.11.2/query/+esm",
+    "@reduxjs/toolkit/query/react": "https://cdn.jsdelivr.net/npm/@reduxjs/toolkit@2.11.2/query/react/+esm",
+    "react-redux":                  "https://cdn.jsdelivr.net/npm/react-redux@9.2.0/+esm",
+    "react":                        "https://cdn.jsdelivr.net/npm/react@18.3.1/+esm",
+    "react-dom":                    "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/+esm",
+    "redux":                        "https://cdn.jsdelivr.net/npm/redux@5.0.1/+esm",
+    "immer":                        "https://cdn.jsdelivr.net/npm/immer@11.0.1/+esm",
+    "reselect":                     "https://cdn.jsdelivr.net/npm/reselect@5.1.1/+esm"
+  }
+}
+```
+
+Including transitive peer deps. These are discovered by actually loading the files, not by guessing from package.json `peerDependencies` (which is often wrong or incomplete).
+
+---
+
+## 7. the pivot: browser as measurement instrument
+
+### the core insight
+The browser already has the perfect instrument: `PerformanceResourceTiming`. When the browser loads a module, every sub-request in the waterfall gets a timing entry:
+
+```
+entry.name             → the actual URL fetched
+entry.transferSize     → bytes over the wire (compressed)
+entry.encodedBodySize  → compressed size
+entry.decodedBodySize  → uncompressed / parse cost
+entry.startTime        → when request started
+entry.responseEnd      → when it finished
+entry.initiatorType    → 'script' | 'fetch' | etc.
+```
+
+This gives us — for free, from a real browser on a real network:
+- the complete waterfall (every URL, in order, with timing)
+- which fetches were parallel vs sequential (gap between `startTime` values)
+- actual wire size vs parse size (not a HEAD request guess)
+- deduplication reality (if a URL appears once, browser deduplicated it)
+
+### what changes
+| | today | after pivot |
+|---|---|---|
+| who measures | our server (HEAD requests to CDN) | the user's browser (Performance API) |
+| what is measured | root CDN URL Content-Length | every file actually loaded |
+| server role | measurer | recorder + aggregator |
+| primary output | SVG badge (one number) | waterfall + importmap + badge |
+| badge data | HEAD Content-Length (wrong) | crowd-sourced real browser data |
+
+### the new core loop
+1. user types package names + subpaths they use: `@reduxjs/toolkit`, `@reduxjs/toolkit/query/react`
+2. bulk UI builds an importmap and dynamically loads all of them in a sandboxed iframe
+3. reads `iframe.contentWindow.performance.getEntriesByType('resource')`
+4. renders waterfall chart, totals, importmap output
+5. POSTs measurement to `/_record` endpoint → stored in D1
+6. over time: aggregated P50/P90 by browser type + network condition
+
+### what the output looks like
+```
+@reduxjs/toolkit + /query/react  ·  jsDelivr  ·  Chrome/133  ·  broadband
+──────────────────────────────────────────────────────────────────────────
+8 files  ·  214 kB wire  ·  680 kB parsed  ·  3 sequential round trips
+
+Round 1  (0 ms)
+  @reduxjs/toolkit/+esm         23 kB  ┐ parallel
+  @reduxjs/toolkit/query/react   14 kB  ┘
+
+Round 2  (+45 ms)
+  react-redux/+esm               18 kB  ┐ parallel
+  redux/+esm                     12 kB  │
+  immer/+esm                     22 kB  │
+  reselect/+esm                   8 kB  ┘
+
+Round 3  (+90 ms)
+  react@18.3.1/+esm              87 kB  ┐ parallel
+  scheduler@0.23.2/+esm          30 kB  ┘
+
+Importmap ↓
+{ "@reduxjs/toolkit": "...", "@reduxjs/toolkit/query/react": "...", ... }
+```
+
+### the badge (still useful, now honest)
+```
+@reduxjs/toolkit/query/react · jsDelivr · 8 files · 214 kB · 3 hops
+```
+Derived from real browser measurements, not HEAD request guessing.
+
+---
+
+## 8. the wildcard exports problem — solved by the browser approach
+
+Wildcard exports (`"./*"` in package.json) cannot be enumerated statically. But with the browser approach, this is no longer a blocker:
+
+- user says "I use `zustand/middleware` and `zustand/vanilla`"
+- bulk loads exactly those
+- Performance API reports exactly what files were fetched
+- importmap is derived from the fetched URLs, not from guessing the exports field
+
+The wildcard case disappears as a special case. The browser resolves it naturally.
+
+---
+
+## 9. open technical questions before building
+
+**`Timing-Allow-Origin`**: `PerformanceResourceTiming` only gives `transferSize`/`decodedBodySize` for cross-origin resources if the CDN sends `Timing-Allow-Origin: *`. jsDelivr sends it. esm.sh needs verification. Without it: we still get URLs and timing, but not byte sizes. Fallback: proxy through our Worker (adds TAO headers) — acceptable for size measurement, distorts latency.
+
+**Sandboxing the iframe**: same-origin iframe (served from our domain via a blob URL or srcdoc) lets us read its performance entries. Cross-origin iframe does not. Loading from a blob URL or srcdoc means the importmap needs absolute URLs (which we'd have anyway).
+
+**Module loading errors**: some packages don't work without specific peer deps already present. Need graceful handling — partial waterfall + error annotation.
+
+**`?bundle` vs default on esm.sh**: esm.sh's default is the wrapper (tiny). `?bundle` inlines some deps but not all. Both are valid measurement targets — they represent different externalisation strategies. UI could offer the choice.
+
+---
+
+## 10. what stays the same
+
+- Cloudflare Workers + D1 + Wrangler — infra stays
+- SolidJS client — stays
+- SVG badges for README embedding — stays, better data
+- The historical version chart concept — stays, now with real measurement data
+- Clean minimal aesthetic — stays
+- The `/_bundle` JSON API as a read endpoint for aggregated data — stays and improves
+- Multi-CDN comparison — stays, becomes a first-class side-by-side view
+
+---
+
+## 11. what the new write endpoint looks like
+
+```
+POST /_record
+{
+  "packages": ["@reduxjs/toolkit", "@reduxjs/toolkit/query/react"],
+  "cdn": "jsdelivr",
+  "browser": "Chrome/133",
+  "connection": "4g",                   // navigator.connection.effectiveType
+  "resources": [
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@reduxjs/toolkit@2.11.2/+esm",
+      "transferSize": 23148,
+      "decodedBodySize": 89000,
+      "startTime": 0,
+      "responseEnd": 45,
+      "initiatorType": "script"
+    },
+    ...
+  ]
+}
+```
+
+Server stores in D1, aggregates over time. Badges and history charts read from aggregated data.
+
+---
+
+## 12. north star
+
+> **bulk answers the question "what will it cost my users if I externalise this library?" with real browser data, not server-side guesses.**
+
+The primary output is an importmap + a waterfall. The badge is a compressed summary of that data, useful for READMEs. The historical chart shows how that cost has evolved across versions. The crowd-sourced angle means the data improves with every person who uses the tool.
+
+This is differentiated from BundlePhobia (which answers "what does bundling cost") and from existing badge services (which show one wrong number). No one is answering the externalisation question with real browser measurement data.
