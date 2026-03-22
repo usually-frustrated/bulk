@@ -7,10 +7,15 @@ import { LoadingOverlay } from './components/LoadingOverlay';
 import { measureAllExports, type CdnId, type MeasurementResult } from './utils/measure';
 import styles from './App.module.css';
 
+interface ExportInfo {
+	key: string;
+	path: string | null;
+}
+
 interface PackageInfo {
 	name: string;
 	version: string;
-	exports: string[];
+	exports: ExportInfo[];
 }
 
 export function App() {
@@ -43,10 +48,11 @@ export function App() {
 			setPkg(packageInfo);
 			
 			// Step 2: Measure all exports across all CDNs
+			const exportKeys = packageInfo.exports.map(e => e.key);
 			const results = await measureAllExports(
 				packageInfo.name,
 				packageInfo.version,
-				packageInfo.exports,
+				exportKeys,
 				(current, total, exportPath, cdn) => {
 					setLoadingProgress({ current, total });
 				}

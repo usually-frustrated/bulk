@@ -1,9 +1,14 @@
 import type { Env } from '../types';
 
+interface ExportInfo {
+	key: string;
+	path: string | null;
+}
+
 interface PackageInfo {
 	name: string;
 	version: string;
-	exports: string[];
+	exports: ExportInfo[];
 }
 
 interface NpmPackageJson {
@@ -70,38 +75,81 @@ async function resolveJsrVersion(pkg: string, version?: string): Promise<string>
 	return data.latest;
 }
 
-function parseExports(packageJson: NpmPackageJson): string[] {
-	const exports = packageJson.exports;
-	const result: string[] = [];
+function resolveExportPath(exportsObj: Record<string, unknown>, key: string): string | null {
+	const entry = exportsObj[key];
+	if (!entry) return null;
 	
-	if (!exports) {
-		return ['.'];
+	if (typeof entry === 'string') {
+		return entry;
 	}
 	
-	if (typeof exports === 'string') {
-		return ['.'];
-	}
-	
-	for (const key of Object.keys(exports)) {
-		if (key === '.' || key === './') {
-			if (!result.includes('.')) {
-				result.push('.');
+	if (typeof entry === 'object') {
+		const conditions = ['import', 'module', 'default'];
+		for (const cond of conditions) {
+			const condEntry = (entry as Record<string, unknown>)[cond];
+			if (condEntry && typeof condEntry === 'object' && 'default' in condEntry) {
+				const defaultVal = (condEntry as Record<string, unknown>).default;
+				if (typeof defaultVal === 'string') {
+					return defaultVal;
+				}
 			}
-		} else if (key.startsWith('./')) {
-			const normalized = key.slice(2);
-			if (!result.includes(normalized)) {
-				result.push(normalized);
+			if (condEntry && typeof condEntry === 'string') {
+				return condEntry;
 			}
-		} else if (key === 'import' || key === 'require' || key === 'default' || key === 'types') {
-			if (!result.includes('.')) {
-				result.push('.');
-			}
-		} else if (key.includes('*')) {
-			result.push('*');
+		}
+		const firstKey = Object.keys(entry)[0];
+		const firstVal = (entry as Record<string, unknown>)[firstKey];
+		if (typeof firstVal === 'string') {
+			return firstVal;
+		}
+		if (typeof firstVal === 'object' && firstVal && 'default' in firstVal) {
+			return (firstVal as Record<string, unknown>).default as string;
 		}
 	}
 	
-	return result.length > 0 ? result : ['.'];
+	return null;
+}
+
+function parseExports(packageJson: NpmPackageJson): ExportInfo[] {
+	const exports = packageJson.exports;
+	const result: ExportInfo[] = [];
+	const seenKeys = new Set<string>();
+	
+	if (!exports) {
+		return [{ key: '.', path: packageJson.main || packageJson.module || null }];
+	}
+	
+	if (typeof exports === 'string') {
+		return [{ key: '.', path: exports }];
+	}
+	
+	const exportsObj = exports as Record<string, unknown>;
+	
+	for (const key of Object.keys(exportsObj)) {
+		if (key === '.' || key === './') {
+			if (!seenKeys.has('.')) {
+				seenKeys.add('.');
+				result.push({ key: '.', path: resolveExportPath(exportsObj, key) });
+			}
+		} else if (key.startsWith('./')) {
+			const normalized = key.slice(2);
+			if (!seenKeys.has(normalized)) {
+				seenKeys.add(normalized);
+				result.push({ key: normalized, path: resolveExportPath(exportsObj, key) });
+			}
+		} else if (key === 'import' || key === 'require' || key === 'default' || key === 'types') {
+			if (!seenKeys.has('.')) {
+				seenKeys.add('.');
+				result.push({ key: '.', path: resolveExportPath(exportsObj, '.') || resolveExportPath(exportsObj, key) });
+			}
+		} else if (key.includes('*')) {
+			// Wildcard - we'll handle these specially on the client
+			// For now, mark them but they'll need file discovery
+			result.push({ key: '*', path: null });
+		}
+	}
+	
+	return result.length > 0 ? result : [{ key: '.', path: packageJson.main || packageJson.module || null }];
 }
 
 async function fetchNpmPackageJson(pkg: string, version: string): Promise<NpmPackageJson> {
@@ -158,6 +206,37 @@ export async function handleDiscoverRequest(
 		}
 		
 		const exports = parseExports(packageJson);
+		
+		// For wildcard exports, try to discover actual files from unpkg
+		const wildcardExports = exports.filter(e => e.key === '*');
+		if (wildcardExports.length > 0 && registry === 'npm') {
+			try {
+				const filesRes = await fetch(`https://unpkg.com/browse/${pkg}@${resolvedVersion}/?no-cache`);
+				if (filesRes.ok) {
+					const html = await filesRes.text();
+					const fileMatches = html.matchAll(/href="\/[^"]+?\/([^"/]+)"/g);
+					const fileSet = new Set<string>();
+					for (const match of fileMatches) {
+						const filename = match[1];
+						if (filename.endsWith('.js') || filename.endsWith('.mjs')) {
+							const baseName = filename.replace(/\.m?js$/, '');
+							if (baseName !== 'index' && baseName !== 'package') {
+								fileSet.add(baseName);
+							}
+						}
+					}
+					
+					// Add discovered files as exports
+					for (const file of fileSet) {
+						if (!exports.some(e => e.key === file)) {
+							exports.push({ key: file, path: null });
+						}
+					}
+				}
+			} catch {
+				// Ignore file discovery errors
+			}
+		}
 		
 		const result: PackageInfo = {
 			name: packageJson.name,

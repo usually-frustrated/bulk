@@ -3,10 +3,15 @@ import type { MeasurementResult, CdnId } from '../utils/measure';
 import { CDNS } from '../utils/measure';
 import styles from './SummaryTable.module.css';
 
+interface ExportInfo {
+	key: string;
+	path: string | null;
+}
+
 interface SummaryTableProps {
 	pkg: string;
 	version: string;
-	exports: string[];
+	exports: ExportInfo[];
 	measurements: Record<string, Record<CdnId, MeasurementResult>>;
 	onSelectExport: (exportPath: string) => void;
 	selectedExport: string | null;
@@ -55,20 +60,21 @@ export function SummaryTable(props: SummaryTableProps) {
 				</thead>
 				<tbody>
 					<For each={props.exports}>
-						{(exportPath) => {
-							const measurement = () => props.measurements[exportPath];
+						{(exportItem) => {
+							const exportKey = exportItem.key;
+							const measurement = () => props.measurements[exportKey];
 							const bestCdn = () => findBestCdn(measurement() || {} as Record<CdnId, MeasurementResult>);
-							const isExpanded = () => expandedExport() === exportPath;
+							const isExpanded = () => expandedExport() === exportKey;
 							
 							return (
 								<>
 									<tr 
 										class={styles.row}
 										classList={{ [styles.expanded]: isExpanded() }}
-										onClick={() => toggleExpand(exportPath)}
+										onClick={() => toggleExpand(exportKey)}
 									>
 										<td class={styles.colExport}>
-											<code>{exportPath === '.' ? './ (root)' : `./${exportPath}`}</code>
+											<code>{exportKey === '.' ? './ (root)' : `./${exportKey}`}</code>
 										</td>
 										<For each={CDNS}>
 											{(cdn) => {

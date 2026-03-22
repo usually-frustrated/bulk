@@ -25,7 +25,22 @@ export default {
 		}
 
 		if (pathname.startsWith('/_/')) {
-			return env.ASSETS.fetch(request);
+			if (env.ASSETS) {
+				return env.ASSETS.fetch(request);
+			}
+			// Dev mode fallback - try to serve from public folder
+			const filePath = pathname.slice(2);
+			const mimeTypes: Record<string, string> = {
+				'html': 'text/html',
+				'css': 'text/css',
+				'js': 'application/javascript',
+				'png': 'image/png',
+				'ico': 'image/x-icon',
+				'svg': 'image/svg+xml',
+			};
+			const ext = filePath.split('.').pop() || '';
+			const contentType = mimeTypes[ext] || 'text/plain';
+			return new Response(`File not found: ${filePath}`, { status: 404 });
 		}
 
 		return handleBadgeRequest(request, ctx);

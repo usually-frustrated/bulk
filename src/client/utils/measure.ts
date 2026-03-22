@@ -32,12 +32,16 @@ export const CDNS = [
 		return `https://cdn.jsdelivr.net/npm/${pkg}@${version}/${path}/+esm`;
 	}},
 	{ id: 'esmsh', name: 'esm.sh', url: (pkg: string, version: string, path: string) => {
+		// esm.sh uses the path directly - it reads exports from package.json
+		// Use ?bundle for root to get a more complete bundle
 		if (path === '.' || path === './') {
-			return `https://esm.sh/${pkg}@${version}`;
+			return `https://esm.sh/${pkg}@${version}?bundle`;
 		}
 		return `https://esm.sh/${pkg}@${version}/${path}`;
 	}},
 	{ id: 'unpkg', name: 'unpkg', url: (pkg: string, version: string, path: string) => {
+		// unpak serves the file directly - need to find the actual file from exports
+		// For root, ?module triggers ESM resolution
 		if (path === '.' || path === './') {
 			return `https://unpkg.com/${pkg}@${version}?module`;
 		}
@@ -51,6 +55,9 @@ function buildSandboxHtml(pkg: string, version: string, exportPath: string, cdn:
 	const cdnConfig = CDNS.find(c => c.id === cdn)!;
 	const url = cdnConfig.url(pkg, version, exportPath);
 	
+	// Escape the URL for use in JS string
+	const escapedUrl = url.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+	
 	return `<!DOCTYPE html>
 <html>
 <head>
@@ -59,8 +66,12 @@ function buildSandboxHtml(pkg: string, version: string, exportPath: string, cdn:
 </head>
 <body>
 	<script type="module">
-		import * as mod from "${url}";
-		window.parent.postMessage({ type: 'LOADED' }, '*');
+		try {
+			await import("${escapedUrl}");
+			window.parent.postMessage({ type: 'LOADED' }, '*');
+		} catch (e) {
+			window.parent.postMessage({ type: 'ERROR', error: e.message }, '*');
+		}
 	</script>
 </body>
 </html>`;
@@ -152,6 +163,9 @@ export async function measureExport(
 						resources,
 					});
 				}, 100);
+			} else if (event.data?.type === 'ERROR') {
+				cleanup();
+				reject(new Error(`Module load error: ${event.data.error}`));
 			}
 		};
 		
