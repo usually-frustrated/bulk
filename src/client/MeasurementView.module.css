@@ -70,3 +70,11 @@
   border-radius: 4px;
   font-size: 0.9em;
 }
+
+.note {
+  margin: 15px 0;
+  padding: 10px;
+  border-left: 4px solid var(--color-accent);
+  background-color: var(--color-bg-secondary);
+  border-radius: 0 4px 4px 0;
+}
