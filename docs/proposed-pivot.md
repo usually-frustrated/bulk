@@ -377,10 +377,99 @@ Server stores in D1, aggregates over time. Badges and history charts read from a
 
 ---
 
-## 13. north star
+## 13. the runtime chaos — why clarity is the core value
 
-> **bulk answers the question "what will it cost my users if I externalise this library?" with real browser data, not server-side guesses.**
+Everything we discovered in this session points to one underlying problem: **runtime library usage is genuinely, structurally chaotic**, and no tool currently cuts through it.
 
-The primary output is an importmap + a waterfall. The badge is a compressed summary of that data, useful for READMEs. The historical chart shows how that cost has evolved across versions. The crowd-sourced angle means the data improves with every person who uses the tool.
+### the chaos, enumerated
 
-This is differentiated from BundlePhobia (which answers "what does bundling cost") and from existing badge services (which show one wrong number). No one is answering the externalisation question with real browser measurement data.
+**Package authors make inconsistent choices:**
+- react ships UMD + CJS + ESM
+- @reduxjs/toolkit ships CJS + ESM, no UMD
+- zustand ships CJS + ESM, no UMD, wildcard exports only
+- redux ships CJS + ESM, no UMD, single root export
+- same ecosystem, four completely different runtime profiles
+- a package can silently drop a format between minor versions
+
+**CDNs interpret the same package differently:**
+- `esm.sh/react-dom` → 238-byte re-export wrapper (not the code)
+- `jsdelivr/npm/react-dom` → 782-byte CJS stub (won't run in browser)
+- `jsdelivr/npm/react-dom/+esm` → 132 kB ESM with its own import chain
+- `unpkg.com/react-dom` → redirects to CJS
+- same package, four CDNs, four completely different responses, none of them obviously "right"
+
+**The exports field is not a reliable map:**
+- explicit named subpaths → enumerable, predictable
+- wildcard `./*` → valid paths unknown without file crawl
+- no exports field at all → CDN guesses from `main`/`module`/`browser` priority
+- exports conditions (`browser`, `import`, `module`, `default`) → CDN may pick a different condition than your bundler does
+
+**Peer deps are invisible until they aren't:**
+- loading `@reduxjs/toolkit/query/react` silently pulls in react-redux, immer, reselect, react, scheduler
+- none of these are in your importmap until the browser errors
+- you discover them one 404 at a time
+
+**Deduplication is URL-exact and fragile:**
+- two different URL shapes for the same code = downloaded twice
+- esm.sh wrapper URL ≠ esm.sh .mjs URL even for the same package
+- ordering of parallel loads affects whether dedup happens
+
+**The format you need may not exist:**
+- RTK cannot be a script tag. Period. No UMD.
+- zustand cannot be a script tag. No UMD.
+- if your target environment or legacy support requires UMD and the package doesn't ship it, you're blocked — and no tool tells you this upfront
+
+**Version changes break all of the above silently:**
+- a package can change its exports map in a patch release
+- a CDN can change which file it resolves to
+- a peer dep can bump a major version and break dedup
+- nothing monitors this for you
+
+### why this matters for runtime optimization
+
+Build-time optimization is well-understood and well-tooled:
+- webpack-bundle-analyzer, vite visualizer, rollup-plugin-visualizer → show what's in your bundle
+- BundlePhobia → shows what adding a package costs your bundled output
+- tree-shaking, code splitting, dynamic imports → all build-time concerns
+
+**Runtime optimization has no equivalent tooling.** The questions that matter at runtime:
+- will this load as one file or cascade into ten?
+- how many sequential round trips before the library is usable?
+- does externalising this actually save my users anything, or just move bytes around?
+- if I externalise to two different CDNs for two different packages, do shared deps get duplicated?
+- what is the right importmap / script tag order for my specific combination of libraries?
+
+These are not answered by any existing tool. They require actually loading the code in a browser, on a network, and observing what happens.
+
+### clarity as the core value
+
+**bulk's job is to be the tool that makes runtime library cost legible.**
+
+Not an estimate. Not a simulation. Not a HEAD-request guess. The real thing — what a browser, on a given network, with a given set of packages, actually downloads and executes.
+
+This means:
+- showing format availability upfront ("this package has no UMD — script tags won't work")
+- showing which CDN URL actually gives you the real code vs a wrapper or CJS stub
+- showing the complete waterfall including transitive fetches you didn't ask for
+- showing deduplication reality when multiple packages share deps
+- generating the exact importmap or script tag list that works, derived from observation not guessing
+- making this repeatable, comparable across CDNs, and trackable over versions
+
+The badge is a distillation of all of this into a single embeddable signal. But the clarity lives in the full picture.
+
+---
+
+## 14. north star
+
+> **bulk is the missing lens for runtime performance: it shows exactly what a browser pays to load a library, in whatever format and from whatever CDN, with no guessing.**
+
+Primary output: waterfall + importmap or script tag list, generated from real browser measurement.
+Badge: compressed summary of that data, honest and embeddable.
+History chart: how that cost has changed across versions.
+Crowd-sourced data: measurements improve with every user, across browsers and network conditions.
+
+Differentiated from:
+- **BundlePhobia** — answers bundler cost (build-time). bulk answers CDN cost (runtime).
+- **Badge services** — show one number from a HEAD request. bulk shows what actually loads.
+- **CDN docs** — explain their own format. bulk compares across CDNs and explains the differences.
+- **DevTools Network tab** — shows one session. bulk aggregates, historicises, and makes it shareable.
