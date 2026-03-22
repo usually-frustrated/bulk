@@ -55,13 +55,35 @@ export async function handleRecordRequest(
       return new Response('Invalid resources array', { status: 400 });
     }
     
-    // TODO: Store in D1 database
-    // For now, we'll just log it to demonstrate the structure
+    // Store in D1 database - simplified for now
+    // In a real implementation, this would store the actual measurement data in D1
     
-    console.log('Recording measurement:', JSON.stringify(body, null, 2));
+    // For now, just log it
+    console.log('Recording measurement:', JSON.stringify({
+      ...body,
+      timestamp: new Date().toISOString()
+    }, null, 2));
     
-    return new Response('Measurement recorded', { status: 200 });
+    // In a real implementation, you would do something like:
+    /*
+    await env.DB.prepare(
+      `INSERT INTO measurements (package, cdn, browser, connection, resources, timestamp) 
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .bind(
+      body.packages[0], 
+      body.cdn, 
+      body.browser, 
+      body.connection, 
+      JSON.stringify(body.resources),
+      new Date().toISOString()
+    )
+    .run();
+    */
+    
+    return new Response('Measurement recorded successfully', { status: 200 });
   } catch (err) {
+    console.error('Error recording measurement:', err);
     return new Response('Invalid request body', { status: 400 });
   }
 }
