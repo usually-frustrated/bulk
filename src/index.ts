@@ -4,6 +4,7 @@ import { handleBundleRequest } from './handlers/bundle';
 import { handleBundleHistory } from './handlers/bundle-history';
 import { handleDiscoverRequest } from './handlers/discover';
 import { handleRecordRequest } from './handlers/measurement';
+import { handleBannerRequest } from './handlers/banner';
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -27,6 +28,10 @@ export default {
 
 		if (pathname === '/_record') {
 			return handleRecordRequest(request, env, ctx);
+		}
+
+		if (pathname.startsWith('/_banner/')) {
+			return handleBannerRequest(request, env, ctx);
 		}
 
 		if (pathname.startsWith('/_/')) {
