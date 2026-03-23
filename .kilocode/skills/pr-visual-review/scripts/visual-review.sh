@@ -12,15 +12,11 @@ OUT_DIR="/tmp/bulk-review-${PR_NUMBER}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$OUT_DIR"
 
-# ── 1. Derive branch alias and wait for deployment ────────────────────────────
-BRANCH=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.ref')
-# Cloudflare alias: branch name with '/' → '-', lowercased
-ALIAS=$(echo "$BRANCH" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
-AFTER=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-echo "==> Waiting for deployment of branch '${BRANCH}' (alias: ${ALIAS})..."
+# ── 1. Get latest commit and wait for deployment ──────────────────────────────
+LATEST_COMMIT=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.sha')
+echo "==> Waiting for deployment of commit ${LATEST_COMMIT}..."
 # wait-for-deploy.sh prints the preview URL as its last line
-PREVIEW_URL=$(bash "$SCRIPT_DIR/wait-for-deploy.sh" "$ALIAS" "$AFTER" | tail -1)
+PREVIEW_URL=$(bash "$SCRIPT_DIR/wait-for-deploy.sh" "$LATEST_COMMIT" | tail -1)
 
 if [ -z "$PREVIEW_URL" ]; then
   echo "ERROR: could not determine preview URL." >&2
