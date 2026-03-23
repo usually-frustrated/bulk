@@ -1,0 +1,130 @@
+.bundleAnalysis {
+  margin-top: 1.5rem;
+}
+
+.loading {
+  padding: 1rem;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.error {
+  padding: 1rem;
+  background: color-mix(in srgb, #ff4444 10%, var(--color-bg));
+  border: 1px solid #ff4444;
+  border-radius: 4px;
+  color: #ff4444;
+  margin: 1rem 0;
+}
+
+.summary {
+  margin-bottom: 1.5rem;
+}
+
+.summary h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+}
+
+.summary p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.tableContainer {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.analysisTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.analysisTable th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, var(--color-text) 5%, var(--color-bg));
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.analysisTable td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.analysisTable tr:last-child td {
+  border-bottom: none;
+}
+
+.analysisTable tr:hover {
+  background: color-mix(in srgb, var(--color-text) 3%, var(--color-bg));
+}
+
+.exportKey {
+  font-family: 'Cascadia Code', monospace;
+  font-size: 0.85rem;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sizeCell {
+  text-align: center;
+  min-width: 100px;
+}
+
+.sizeValue {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.sizeDetail {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
+
+.bestCdn {
+  text-align: center;
+  min-width: 100px;
+}
+
+.bestCdnBadge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: var(--color-accent);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.note {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.empty p {
+  margin: 0.5rem 0;
+}

@@ -18,7 +18,7 @@ bunx playwright install chromium --with-deps 2>/dev/null || npx playwright insta
 
 ## Step 1: Wait for the Cloudflare Deployment
 
-Use the bundled `wait-for-deploy.sh` script, which polls `bunx wrangler versions list` until a version with the correct branch alias appears. This is more reliable than parsing bot comments.
+Use the bundled `wait-for-deploy.sh` script, which polls the branch preview URL until it returns a successful HTTP 200 response.
 
 ```sh
 PR_NUMBER=<PR_NUMBER>
@@ -27,14 +27,13 @@ SKILL_DIR=".kilocode/skills/pr-visual-review"
 
 BRANCH=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.ref')
 ALIAS=$(echo "$BRANCH" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
-AFTER=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-PREVIEW_URL=$(bash "$SKILL_DIR/scripts/wait-for-deploy.sh" "$ALIAS" "$AFTER" | tail -1)
+PREVIEW_URL=$(bash "$SKILL_DIR/scripts/wait-for-deploy.sh" "$ALIAS" | tail -1)
 echo "Preview URL: $PREVIEW_URL"
 PROD_URL="https://bulk.frustrated.dev"
 ```
 
-The branch alias is the git branch name with `/` replaced by `-` and lowercased. The preview URL pattern is `https://<alias>-<worker-name>.sushruth-sastry.workers.dev`.
+The branch alias is the git branch name with `/` replaced by `-` and lowercased. The preview URL pattern is `https://<alias>-bulk.sushruth-sastry.workers.dev`.
 
 ---
 

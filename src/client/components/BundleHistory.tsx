@@ -49,7 +49,6 @@ function toY(bytes: number, maxBytes: number): number {
 
 interface Props {
 	pkg: string;
-	cdn: string;
 	onLoading: (v: boolean) => void;
 }
 
@@ -59,6 +58,7 @@ export function BundleHistory(props: Props) {
 	const [loading, setLoading] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
 	const [hoveredIdx, setHoveredIdx] = createSignal<number | null>(null);
+	const [cdn] = createSignal('jsdelivr'); // Default CDN for history view
 
 	async function analyze() {
 		const pkg = props.pkg.trim();
@@ -75,8 +75,8 @@ export function BundleHistory(props: Props) {
 
 		try {
 			// Map provider ID (badge system) to bundle CDN ID (bundle system)
-		const bundleCdn = props.cdn === 'esmsh' ? 'esm.sh' : props.cdn;
-		const res = await fetch(`/_bundle-history/${pkg}/${exp}?cdn=${bundleCdn}`);
+			const bundleCdn = cdn() === 'esmsh' ? 'esm.sh' : cdn();
+			const res = await fetch(`/_bundle-history/${pkg}/${exp}?cdn=${bundleCdn}`);
 			if (!res.ok) throw new Error(await res.text());
 			setData((await res.json()) as HistoryData);
 		} catch (err) {
@@ -88,16 +88,23 @@ export function BundleHistory(props: Props) {
 	}
 
 	// Auto-load on mount
-	onMount(() => analyze());
+	onMount(() => {
+		if (props.pkg.trim()) {
+			analyze();
+		}
+	});
 
 	// Reset when pkg changes
 	createEffect(() => {
-		const _ = props.pkg;
-		batch(() => {
-			setData(null);
-			setError(null);
-			setHoveredIdx(null);
-		});
+		const pkg = props.pkg.trim();
+		if (pkg) {
+			batch(() => {
+				setData(null);
+				setError(null);
+				setHoveredIdx(null);
+			});
+			analyze();
+		}
 	});
 
 	// ─── chart derivations ──────────────────────────────────────────────────
@@ -160,8 +167,6 @@ export function BundleHistory(props: Props) {
 
 	return (
 		<section class={styles.bundleHistory}>
-			<label class={styles.sectionLabel}>Bundle size history</label>
-
 			<div class={styles.inputRow}>
 				<input
 					type="text"
@@ -178,6 +183,10 @@ export function BundleHistory(props: Props) {
 
 			<Show when={error()}>
 				<p class={styles.error}>{error()}</p>
+			</Show>
+
+			<Show when={loading()}>
+				<div class={styles.loading}>Loading version history...</div>
 			</Show>
 
 			<Show when={data()}>
@@ -286,6 +295,12 @@ export function BundleHistory(props: Props) {
 							{versions().length} versions
 						</span>
 					</div>
+				</div>
+			</Show>
+
+			<Show when={!data() && !loading() && props.pkg.trim()}>
+				<div class={styles.empty}>
+					<p>Enter an export name to see version history for {props.pkg}</p>
 				</div>
 			</Show>
 		</section>

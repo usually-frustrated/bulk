@@ -4,10 +4,9 @@ export function Header() {
 	return (
 		<header class={styles.header}>
 			<h1><img src="/_/logo.png" class={styles.logo} alt="" aria-hidden="true" /> bulk</h1>
-			<p class={styles.tagline}>Package size badges</p>
+			<p class={styles.tagline}>CDN Bundle Size Analysis</p>
 			<p class={styles.tagline}>
-				Shows the actual CDN bundle size - the initial load size when using CDN imports. If the CDN points to a bundle, this is the total
-				bundle size. Unlike bundlephobia which shows minified+gzipped npm package sizes.
+				Measure actual runtime impact across CDNs. Compare jsDelivr, unpkg, and esm.sh bundle sizes.
 			</p>
 		</header>
 	);

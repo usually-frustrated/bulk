@@ -157,6 +157,29 @@
 	font-weight: 600;
 }
 
+/* ─── loading & empty states ────────────────────────────────────────────── */
+
+.loading {
+	padding: 2rem;
+	text-align: center;
+	color: var(--color-text-muted);
+	font-style: italic;
+}
+
+.empty {
+	padding: 2rem;
+	text-align: center;
+	color: var(--color-text-muted);
+	font-style: italic;
+	border: 1px dashed var(--color-border);
+	border-radius: 4px;
+	margin-top: 1rem;
+}
+
+.empty p {
+	margin: 0;
+}
+
 /* ─── footer ──────────────────────────────────────────────────────────────── */
 
 .chartFooter {
