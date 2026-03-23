@@ -50,10 +50,11 @@ function toY(bytes: number, maxBytes: number): number {
 interface Props {
 	pkg: string;
 	onLoading: (v: boolean) => void;
+	initialExport?: string;
 }
 
 export function BundleHistory(props: Props) {
-	const [exportInput, setExportInput] = createSignal('');
+	const [exportInput, setExportInput] = createSignal(props.initialExport ?? '');
 	const [data, setData] = createSignal<HistoryData | null>(null);
 	const [loading, setLoading] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
@@ -64,6 +65,16 @@ export function BundleHistory(props: Props) {
 		const pkg = props.pkg.trim();
 		if (!pkg) return;
 		const exp = exportInput().trim() || 'index';
+
+		// Sync export to URL
+		const params = new URLSearchParams(window.location.search);
+		if (exp && exp !== 'index') {
+			params.set('export', exp);
+		} else {
+			params.delete('export');
+		}
+		const qs = params.toString();
+		history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
 
 		batch(() => {
 			setLoading(true);
@@ -94,7 +105,8 @@ export function BundleHistory(props: Props) {
 		}
 	});
 
-	// Reset when pkg changes
+	// Reset when pkg changes, but preserve initialExport on first load
+	let firstRun = true;
 	createEffect(() => {
 		const pkg = props.pkg.trim();
 		if (pkg) {
@@ -102,8 +114,9 @@ export function BundleHistory(props: Props) {
 				setData(null);
 				setError(null);
 				setHoveredIdx(null);
-				setExportInput('index');
+				if (!firstRun) setExportInput('index');
 			});
+			firstRun = false;
 			analyze();
 		}
 	});

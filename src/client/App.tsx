@@ -6,9 +6,16 @@ import { BundleAnalysis } from './components/BundleAnalysis';
 import { BundleHistory } from './components/BundleHistory';
 import styles from './App.module.css';
 
+function getQueryParam(key: string): string | null {
+	return new URLSearchParams(window.location.search).get(key);
+}
+
 export function App() {
-	const [pkg, setPkg] = createSignal('react');
-	const [inputValue, setInputValue] = createSignal('react');
+	const initialPkg = getQueryParam('pkg') ?? 'react';
+	const initialExport = getQueryParam('export') ?? undefined;
+
+	const [pkg, setPkg] = createSignal(initialPkg);
+	const [inputValue, setInputValue] = createSignal(initialPkg);
 
 	// Debounce input: only update pkg 500ms after user stops typing
 	let debounceTimer: number | undefined;
@@ -25,6 +32,19 @@ export function App() {
 		if (debounceTimer) {
 			window.clearTimeout(debounceTimer);
 		}
+	});
+
+	// Keep URL in sync so state is shareable
+	createEffect(() => {
+		const p = pkg();
+		const params = new URLSearchParams(window.location.search);
+		if (p && p !== 'react') {
+			params.set('pkg', p);
+		} else {
+			params.delete('pkg');
+		}
+		const qs = params.toString();
+		history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
 	});
 
 	// Counter-based loading: overlay stays up until ALL active fetches finish
@@ -61,7 +81,7 @@ export function App() {
 				</div>
 
 				<BundleAnalysis pkg={pkg()} onLoading={handleLoading} />
-				<BundleHistory pkg={pkg()} onLoading={handleLoading} />
+				<BundleHistory pkg={pkg()} onLoading={handleLoading} initialExport={initialExport} />
 			</div>
 			<Footer />
 			<Show when={loading()}>
