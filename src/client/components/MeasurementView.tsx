@@ -13,24 +13,6 @@ interface DiscoverResult {
   wildcardResolved: boolean;
 }
 
-interface ResourceTiming {
-  url: string;
-  transferSize: number | null;
-  decodedBodySize: number | null;
-  startTime: number;
-  responseEnd: number;
-  initiatorType: string;
-}
-
-interface MeasurementResult {
-  packages: string[];
-  cdn: string;
-  browser: string;
-  connection: string;
-  version: string;
-  resources: ResourceTiming[];
-}
-
 export function MeasurementView(props: { pkg: string }) {
   const [discoverData, setDiscoverData] = createSignal<DiscoverResult | null>(null);
   const [measurementResults, setMeasurementResults] = createSignal<Record<string, any> | null>(null);
