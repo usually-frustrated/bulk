@@ -5,6 +5,7 @@ import { handleBundleHistory } from './handlers/bundle-history';
 import { handleDiscoverRequest } from './handlers/discover';
 import { handleRecordRequest } from './handlers/measurement';
 import { handleBannerRequest } from './handlers/banner';
+import { handleMetaVersionRequest } from './handlers/meta-version';
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -28,6 +29,10 @@ export default {
 
 		if (pathname === '/_record') {
 			return handleRecordRequest(request, env, ctx);
+		}
+
+		if (pathname === '/_meta/version') {
+			return handleMetaVersionRequest(request, env, ctx);
 		}
 
 		if (pathname.startsWith('/_banner/')) {

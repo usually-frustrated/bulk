@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, onCleanup, createEffect } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LoadingOverlay } from './components/LoadingOverlay';
@@ -7,6 +7,24 @@ import styles from './App.module.css';
 
 export function App() {
 	const [pkg, setPkg] = createSignal('zustand');
+	const [inputValue, setInputValue] = createSignal('zustand');
+
+	// Debounce input: only update pkg 500ms after user stops typing
+	let debounceTimer: number | undefined;
+	createEffect(() => {
+		const value = inputValue();
+		if (debounceTimer) {
+			window.clearTimeout(debounceTimer);
+		}
+		debounceTimer = window.setTimeout(() => {
+			setPkg(value.trim());
+		}, 500);
+	});
+	onCleanup(() => {
+		if (debounceTimer) {
+			window.clearTimeout(debounceTimer);
+		}
+	});
 
 	// Counter-based loading: overlay stays up until ALL active fetches finish
 	const [loadingCount, setLoadingCount] = createSignal(0);
@@ -27,8 +45,9 @@ export function App() {
 								id="pkg-input"
 								type="text"
 								class={styles.pkgInput}
-								value={pkg()}
-								onInput={(e) => setPkg(e.currentTarget.value.trim())}
+								value={inputValue()}
+								onInput={(e) => setInputValue(e.currentTarget.value.trim())}
+								onKeyDown={(e) => e.key === 'Enter' && setPkg(inputValue().trim())}
 								placeholder="e.g. zustand, react, lodash, jsr:@std/testing"
 							/>
 						</div>

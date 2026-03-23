@@ -71,60 +71,48 @@ Review the diff output from the script. Common things to check for this project:
 
 ## Step 4: Upload Screenshots and Update PR Description
 
-GitHub does not support direct image uploads via the CLI, so encode screenshots as base64 and upload to a gist, or use the GitHub upload API via a comment first, then reference in the description.
+### Image Hosting Strategy
 
-**Recommended approach — attach via PR comment + update description:**
+Instead of relying on `/tmp` or external hosting, the skill uploads screenshots to a changelog folder within the repo:
 
-```sh
-# 1. Upload images by creating a PR comment with them embedded
-BEFORE_B64=$(base64 -i /tmp/bulk-review/before.png)
-AFTER_B64=$(base64 -i /tmp/bulk-review/after.png)
-
-# GitHub Markdown can embed images hosted via URLs.
-# Easiest: upload to the PR itself as review comments with attachments (not supported by gh CLI).
-# Best reliable approach: create a gist with the images, then reference URLs.
-
-# Create a gist containing the screenshots
-gh gist create /tmp/bulk-review/before.png /tmp/bulk-review/after.png \
-  --desc "Visual diff for PR #${PR_NUMBER}" \
-  --public
-
-# Grab the raw URLs from the gist
-GIST_URL=$(gh gist list --limit 1 --json url -q '.[0].url')
-echo "Gist: $GIST_URL"
+```
+/docs/changelog/<pr-number>/
+├── before.png
+├── after.png
+├── before.html  (optional: full HTML snapshot)
+└── after.html   (optional: full HTML snapshot)
 ```
 
-Alternatively (simpler), attach images via a PR comment and include a diff summary:
+This provides:
+- **Permanent visual history** in the repo
+- **Version-controlled before/after comparison**
+- **Easy reference** for future PRs
+- **No external dependencies** or upload API limitations
+
+### Upload Screenshots to Changelog
 
 ```sh
-# Run capture and pipe output for the diff summary
-DIFF_SUMMARY=$(PREVIEW_URL="$PREVIEW_URL" PROD_URL="$PROD_URL" OUT_DIR="/tmp/bulk-review" \
-  bun ".kilocode/skills/pr-visual-review/scripts/capture.mjs" 2>&1 | grep -A100 'COMPONENT DIFF')
+PR_NUMBER=<PR_NUMBER>
+DOCS_DIR="/docs/changelog/${PR_NUMBER}"
+mkdir -p "${DOCS_DIR}"
 
-# Create a comment with the diff summary
-# (Images must be pasted or hosted externally; attach via GitHub web UI if needed)
-gh pr comment "$PR_NUMBER" --body "## Visual Review
+# Copy screenshots to changelog folder
+cp /tmp/bulk-review/before.png "${DOCS_DIR}/before.png"
+cp /tmp/bulk-review/after.png "${DOCS_DIR}/after.png"
 
-### Component diff
-\`\`\`
-${DIFF_SUMMARY}
-\`\`\`
-
-### Before (production — https://bulk.frustrated.dev)
-_Screenshot: \`/tmp/bulk-review/before.png\` — attach manually or via gist_
-
-### After (branch preview — ${PREVIEW_URL})
-_Screenshot: \`/tmp/bulk-review/after.png\` — attach manually or via gist_
-"
+# Commit and push
+git add "${DOCS_DIR}/"
+git commit -m "chore: add visual review for PR #${PR_NUMBER}"
+git push
 ```
 
-**To embed screenshots directly in the PR description** (requires the images to be accessible via URL):
+### Update PR Description with Changelog Images
 
 ```sh
 # Get current PR body
 CURRENT_BODY=$(gh pr view "$PR_NUMBER" --json body -q .body)
 
-# Append before/after section (replace <BEFORE_URL> and <AFTER_URL> with actual hosted URLs)
+# Append before/after section with changelog image URLs
 NEW_BODY="${CURRENT_BODY}
 
 ---
@@ -132,12 +120,28 @@ NEW_BODY="${CURRENT_BODY}
 
 | Before (production) | After (preview) |
 |---|---|
-| ![before](<BEFORE_URL>) | ![after](<AFTER_URL>) |
+| ![before](https://github.com/usually-frustrated/bulk/blob/main/${DOCS_DIR}/before.png?raw=true) | ![after](https://github.com/usually-frustrated/bulk/blob/main/${DOCS_DIR}/after.png?raw=true) |
 
-Preview: ${PREVIEW_URL}"
+Preview: ${PREVIEW_URL}
+"
 
 gh pr edit "$PR_NUMBER" --body "$NEW_BODY"
 ```
+
+### Full End-to-End Script
+
+```sh
+#!/usr/bin/env bash
+set -e
+
+PR_NUMBER=${1:?Usage: $0 <PR_NUMBER> [TEST_PKG]}
+TEST_PKG=${2:-zustand}
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+PROD_URL="https://bulk.frustrated.dev"
+OUT_DIR="/tmp/bulk-review-${PR_NUMBER}"
+DOCS_DIR="/docs/changelog/${PR_NUMBER}"
+mkdir -p "$OUT_DIR"
+mkdir -p "$DOCS_DIR"
 
 ---
 
@@ -206,6 +210,19 @@ Screenshots saved locally:
 "
 
 echo "==> Done. Screenshots at $OUT_DIR/"
+
+# Upload to changelog folder
+echo "==> Uploading to changelog..."
+cp "$OUT_DIR/before.png" "${DOCS_DIR}/before.png"
+cp "$OUT_DIR/after.png" "${DOCS_DIR}/after.png"
+cp "$OUT_DIR/before-components.json" "${DOCS_DIR}/before.html"
+cp "$OUT_DIR/after-components.json" "${DOCS_DIR}/after.html"
+
+git add "${DOCS_DIR}/"
+git commit -m "chore: add visual review for PR #${PR_NUMBER}"
+git push
+
+echo "Screenshots committed to docs/changelog/${PR_NUMBER}/"
 ```
 
 Run with: `bash .kilocode/skills/pr-visual-review/scripts/visual-review.sh <PR_NUMBER>`
