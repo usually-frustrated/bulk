@@ -7,7 +7,8 @@ export async function handleMetaVersionRequest(
 	env: Env,
 	ctx: ExecutionContext,
 ): Promise<Response> {
-	const commitHash = process.env.CF_BUILD_ID || 'unknown';
+	// Try to get commit hash from various sources
+	const commitHash = (env as any).CF_BUILD_ID || process.env.CF_BUILD_ID || 'unknown';
 	
 	return Response.json({
 		commit: commitHash,
