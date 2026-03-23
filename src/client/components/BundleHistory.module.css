@@ -29,28 +29,25 @@
 	display: flex;
 	align-items: stretch;
 	gap: 0;
-	border: 1px solid var(--color-border);
-	border-radius: 4px;
-	overflow: hidden;
+	border-bottom: 1px solid var(--color-border);
 	margin-bottom: var(--spacing-preview-top);
 	transition: border-color 0.2s;
 
 	&:focus-within {
-		border-color: var(--color-accent);
+		border-bottom-color: var(--color-accent);
 	}
 }
 
 .inputExport {
-	padding: var(--spacing-input-block) var(--spacing-input-inline);
+	padding: var(--spacing-input-block) 0;
 	font-family: 'Cascadia Code', monospace;
 	font-size: var(--font-size-input);
 	color: var(--color-text);
-	background: var(--color-bg);
+	background: transparent;
 	border: none;
 	outline: none;
 	min-width: 0;
 	flex: 1;
-	border-right: 1px solid var(--color-border);
 }
 
 .analyzeBtn {
@@ -167,13 +164,10 @@
 }
 
 .empty {
-	padding: 2rem;
+	padding: 1.5rem 0;
 	text-align: center;
 	color: var(--color-text-muted);
 	font-style: italic;
-	border: 1px dashed var(--color-border);
-	border-radius: 4px;
-	margin-top: 1rem;
 }
 
 .empty p {

@@ -147,10 +147,7 @@ main {
 }
 
 .hero-section {
-	background: color-mix(in srgb, var(--color-text) 3%, var(--color-bg));
 	padding: var(--spacing-hero-block);
-	border: 1px solid var(--color-border);
-	border-radius: 8px;
 }
 
 @media (max-width: 480px) {

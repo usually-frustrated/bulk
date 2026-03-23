@@ -1,5 +1,17 @@
 .bundleAnalysis {
   margin-top: 1.5rem;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100vw;
+    height: 1px;
+    background: var(--color-border-light);
+  }
 }
 
 .loading {
@@ -10,12 +22,10 @@
 }
 
 .error {
-  padding: 1rem;
-  background: color-mix(in srgb, #ff4444 10%, var(--color-bg));
-  border: 1px solid #ff4444;
-  border-radius: 4px;
+  padding: 0.75rem 0;
   color: #ff4444;
   margin: 1rem 0;
+  border-bottom: 1px solid #ff4444;
 }
 
 .summary {
@@ -53,7 +63,6 @@
   background: var(--color-accent);
   color: white;
   border: none;
-  border-radius: 4px;
   cursor: pointer;
   transition: opacity 0.2s;
 }
@@ -70,8 +79,6 @@
 .tableContainer {
   overflow-x: auto;
   margin: 1rem 0;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
 }
 
 .analysisTable {
@@ -134,26 +141,23 @@
 
 .bestCdnBadge {
   display: inline-block;
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.5rem;
   background: var(--color-accent);
   color: white;
-  border-radius: 12px;
   font-size: 0.8rem;
   font-weight: 600;
 }
 
 .note {
   margin-top: 1rem;
-  padding: 0.75rem;
-  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
-  border: 1px solid var(--color-accent);
-  border-radius: 4px;
+  padding: 0.5rem 0 0.5rem 0.75rem;
+  border-left: 2px solid var(--color-accent);
   font-size: 0.85rem;
   color: var(--color-text-muted);
 }
 
 .empty {
-  padding: 2rem;
+  padding: 1.5rem 0;
   text-align: center;
   color: var(--color-text-muted);
   font-style: italic;
