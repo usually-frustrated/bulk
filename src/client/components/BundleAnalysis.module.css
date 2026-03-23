@@ -1,5 +1,5 @@
 .bundleAnalysis {
-  margin-top: 0.5rem;
+  margin-top: var(--spacing-analysis-top);
   position: relative;
 
   &::before {
@@ -15,51 +15,51 @@
 }
 
 .loading {
-  padding: 1rem;
+  padding: var(--spacing-note-margin) 0;
   text-align: center;
   color: var(--color-text-muted);
   font-style: italic;
 }
 
 .error {
-  padding: 0.75rem 0;
+  padding: var(--spacing-note-block) 0;
   color: #ff4444;
-  margin: 1rem 0;
+  margin: var(--spacing-note-margin) 0;
   border-bottom: 1px solid #ff4444;
 }
 
 .summary {
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-section-gap);
 }
 
 .summaryHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.1rem;
+  margin-bottom: var(--spacing-hairline);
 }
 
 .summary h4 {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: var(--font-size-label);
   font-weight: 600;
 }
 
 .summary p {
   margin: 0;
   color: var(--color-text-muted);
-  font-size: 0.75rem;
+  font-size: var(--font-size-label);
 }
 
 .refreshTime {
-  font-size: 0.7rem !important;
+  font-size: var(--font-size-sm) !important;
   font-style: italic;
 }
 
 .refreshButton {
-  padding: 0.4rem 0.8rem;
+  padding: var(--spacing-refresh-block) var(--spacing-refresh-inline);
   font-family: 'Cascadia Code', monospace;
-  font-size: 0.8rem;
+  font-size: var(--font-size-base);
   background: var(--color-accent);
   color: white;
   border: none;
@@ -78,18 +78,18 @@
 
 .tableContainer {
   overflow-x: auto;
-  margin: 1rem 0;
+  margin: var(--spacing-note-margin) 0;
 }
 
 .analysisTable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.75rem;
+  font-size: var(--font-size-label);
 }
 
 .analysisTable th {
   text-align: left;
-  padding: 0.2rem 0.5rem;
+  padding: var(--spacing-compact-block) var(--spacing-table-inline);
   background: color-mix(in srgb, var(--color-text) 5%, var(--color-bg));
   border-bottom: 1px solid var(--color-border);
   font-weight: 600;
@@ -97,7 +97,7 @@
 }
 
 .analysisTable td {
-  padding: 0.15rem 0.5rem;
+  padding: var(--spacing-table-cell-block) var(--spacing-table-inline);
   border-bottom: 1px solid var(--color-border-light);
 }
 
@@ -111,8 +111,8 @@
 
 .exportKey {
   font-family: 'Cascadia Code', monospace;
-  font-size: 0.85rem;
-  max-width: 200px;
+  font-size: var(--font-size-md);
+  max-width: var(--table-export-max-width);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -120,48 +120,48 @@
 
 .sizeCell {
   text-align: center;
-  min-width: 100px;
+  min-width: var(--table-size-col-min);
 }
 
 .sizeValue {
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: var(--font-size-label);
 }
 
 .sizeDetail {
-  font-size: 0.65rem;
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
 
 .bestCdn {
   text-align: center;
-  min-width: 100px;
+  min-width: var(--table-size-col-min);
 }
 
 .bestCdnBadge {
   display: inline-block;
-  padding: 0.2rem 0.5rem;
+  padding: var(--spacing-compact-block) var(--spacing-table-inline);
   background: var(--color-accent);
   color: white;
-  font-size: 0.8rem;
+  font-size: var(--font-size-base);
   font-weight: 600;
 }
 
 .note {
-  margin-top: 1rem;
-  padding: 0.5rem 0 0.5rem 0.75rem;
+  margin-top: var(--spacing-note-margin);
+  padding: var(--spacing-note-block) 0 var(--spacing-note-block) var(--spacing-note-left);
   border-left: 2px solid var(--color-accent);
-  font-size: 0.85rem;
+  font-size: var(--font-size-md);
   color: var(--color-text-muted);
 }
 
 .empty {
-  padding: 1.5rem 0;
+  padding: var(--spacing-empty-block) 0;
   text-align: center;
   color: var(--color-text-muted);
   font-style: italic;
 }
 
 .empty p {
-  margin: 0.5rem 0;
+  margin: var(--spacing-note-block) 0;
 }

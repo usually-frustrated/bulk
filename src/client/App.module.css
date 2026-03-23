@@ -5,7 +5,7 @@
 
 .inputRow {
 	display: flex;
-	gap: 0.75rem;
+	gap: var(--spacing-row-gap);
 	align-items: flex-end;
 }
 
@@ -45,7 +45,7 @@
 
 .cdnSelect {
 	padding: var(--spacing-input-block) 0;
-	padding-right: 1.25rem;
+	padding-right: var(--spacing-select-pr);
 	font-family: 'Cascadia Code', monospace;
 	font-size: var(--font-size-input);
 	color: var(--color-text);
@@ -58,7 +58,7 @@
 	appearance: none;
 	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
 	background-repeat: no-repeat;
-	background-position: right 0.1rem center;
+	background-position: right var(--spacing-hairline) center;
 
 	&:focus {
 		border-bottom-color: var(--color-accent);
@@ -66,21 +66,21 @@
 }
 
 .note {
-	margin: 15px 0;
-	padding: 10px 0;
+	margin: var(--spacing-note-margin) 0;
+	padding: var(--spacing-note-block) 0;
 	border-left: 2px solid var(--color-accent);
-	padding-left: 0.75rem;
+	padding-left: var(--spacing-note-left);
 }
 
 .error {
 	color: var(--color-error);
-	padding: 10px 0;
-	margin: 10px 0;
+	padding: var(--spacing-note-block) 0;
+	margin: var(--spacing-note-block) 0;
 	border-bottom: 1px solid currentColor;
 }
 
 .badgePreview {
-	margin: 0.5rem 0;
+	margin: var(--spacing-note-block) 0;
 }
 
 .badgePreview img {
@@ -101,6 +101,6 @@
 	}
 
 	.cdnSelect {
-		padding-right: 1.6rem;
+		padding-right: var(--spacing-select-pr-mobile);
 	}
 }

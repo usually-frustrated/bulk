@@ -1,10 +1,10 @@
 .footer {
-	padding: 0.5rem 0;
+	padding: var(--spacing-footer-block) 0;
 	font-size: var(--font-size-label);
 	color: var(--color-text-muted);
 	display: flex;
 	flex-direction: column;
-	gap: 0.25rem;
+	gap: var(--spacing-section-gap);
 	align-items: flex-start;
 	position: relative;
 
@@ -24,12 +24,12 @@
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
-	gap: 0.1rem;
+	gap: var(--spacing-hairline);
 }
 
 .apiLabel {
-	font-size: 0.65rem;
-	letter-spacing: 0.08em;
+	font-size: var(--font-size-xs);
+	letter-spacing: var(--letter-spacing-label);
 	text-transform: uppercase;
 	opacity: 0.5;
 }
@@ -38,7 +38,7 @@
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	gap: 0.75rem;
+	gap: var(--spacing-footer-routes-gap);
 	flex-wrap: wrap;
 
 	code {
@@ -49,16 +49,16 @@
 }
 
 .providers {
-	font-size: 0.7rem;
+	font-size: var(--font-size-sm);
 	opacity: 0.55;
-	margin-top: 0.1rem;
+	margin-top: var(--spacing-hairline);
 }
 
 .links {
 	display: flex;
 	align-items: center;
-	gap: 0.5rem;
-	font-size: 0.7rem;
+	gap: var(--spacing-note-block);
+	font-size: var(--font-size-sm);
 	opacity: 0.6;
 
 	a {

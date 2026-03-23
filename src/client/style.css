@@ -17,7 +17,7 @@
 }
 
 body {
-	line-height: 1.5;
+	line-height: var(--line-height-base);
 	-webkit-font-smoothing: antialiased;
 }
 
@@ -103,6 +103,12 @@ h6 {
 	--font-size-input: 0.75rem;
 	--font-size-button: 0.75rem;
 	--font-size-providers: 0.75rem;
+	--font-size-xs: 0.65rem;
+	--font-size-sm: 0.7rem;
+	--font-size-base: 0.8rem;
+	--font-size-md: 0.85rem;
+	--font-size-chart-xs: 10px;
+	--font-size-chart: 11px;
 
 	--font-size-heading-mobile: 1.1rem;
 	--font-size-tagline-mobile: 0.7rem;
@@ -111,6 +117,37 @@ h6 {
 	--font-size-input-mobile: 0.65rem;
 	--font-size-button-mobile: 0.65rem;
 	--font-size-providers-mobile: 0.65rem;
+
+	--line-height-base: 1.5;
+	--letter-spacing-label: 0.08em;
+
+	--layout-max-width: 800px;
+	--layout-max-width-mobile: 448px;
+	--table-export-max-width: 200px;
+	--table-size-col-min: 100px;
+	--badge-img-height: 20px;
+
+	--spacing-hairline: 0.1rem;
+	--spacing-logo-gap: 0.35em;
+	--spacing-row-gap: 0.75rem;
+	--spacing-select-pr: 1.25rem;
+	--spacing-select-pr-mobile: 1.6rem;
+	--spacing-compact-block: 0.2rem;
+	--spacing-table-cell-block: 0.15rem;
+	--spacing-table-inline: 0.5rem;
+	--spacing-cell-row-block: 0.35rem;
+	--spacing-cell-row-inline: 0.5rem;
+	--spacing-copy-btn-block: 0.25rem;
+	--spacing-copy-btn-inline: 0.6rem;
+	--spacing-refresh-block: 0.4rem;
+	--spacing-refresh-inline: 0.8rem;
+	--spacing-note-margin: 1rem;
+	--spacing-note-block: 0.5rem;
+	--spacing-note-left: 0.75rem;
+	--spacing-analysis-top: 0.5rem;
+	--spacing-empty-block: 1.5rem;
+	--spacing-footer-block: 0.5rem;
+	--spacing-footer-routes-gap: 0.75rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -141,7 +178,7 @@ body {
 
 main {
 	width: 100%;
-	max-width: 800px;
+	max-width: var(--layout-max-width);
 	padding: var(--spacing-main-block);
 	text-align: left;
 }
@@ -152,7 +189,7 @@ main {
 
 @media (max-width: 480px) {
 	main {
-		max-width: 448px;
+		max-width: var(--layout-max-width-mobile);
 	}
 }
 
