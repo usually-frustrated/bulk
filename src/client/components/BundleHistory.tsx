@@ -87,7 +87,7 @@ export function BundleHistory(props: Props) {
 		}
 	}
 
-	// Auto-load on mount
+	// Auto-load on mount with default export
 	onMount(() => {
 		if (props.pkg.trim()) {
 			analyze();
@@ -102,6 +102,7 @@ export function BundleHistory(props: Props) {
 				setData(null);
 				setError(null);
 				setHoveredIdx(null);
+				setExportInput('index');
 			});
 			analyze();
 		}

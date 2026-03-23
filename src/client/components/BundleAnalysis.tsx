@@ -1,17 +1,10 @@
 import { createSignal, createEffect, For } from 'solid-js';
 import styles from './BundleAnalysis.module.css';
 
-interface BundleSize {
-  bytes_raw: number;
-  bytes_transfer: number;
-  fetched_at: string;
-}
-
-interface ExportAnalysis {
+interface ExportResult {
   key: string;
-  jsdelivr: BundleSize | null;
-  unpkg: BundleSize | null;
-  esmsh: BundleSize | null;
+  bytes_raw: number | null;
+  bytes_transfer: number | null;
 }
 
 interface BundleAnalysisProps {
@@ -20,30 +13,15 @@ interface BundleAnalysisProps {
 }
 
 export function BundleAnalysis(props: BundleAnalysisProps) {
-  const [analysis, setAnalysis] = createSignal<ExportAnalysis[] | null>(null);
+  const [exports, setExports] = createSignal<ExportResult[] | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
   const formatSize = (bytes: number | null): string => {
-    if (bytes === null) return '-';
+    if (bytes === null || bytes === 0) return '-';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} kB`;
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  };
-
-  const getBestCDN = (exportData: ExportAnalysis): string => {
-    const sizes = {
-      jsdelivr: exportData.jsdelivr?.bytes_transfer || Infinity,
-      unpkg: exportData.unpkg?.bytes_transfer || Infinity,
-      esmsh: exportData.esmsh?.bytes_transfer || Infinity,
-    };
-    
-    const minSize = Math.min(sizes.jsdelivr, sizes.unpkg, sizes.esmsh);
-    if (minSize === Infinity) return '-';
-    
-    if (minSize === sizes.jsdelivr) return 'jsDelivr';
-    if (minSize === sizes.unpkg) return 'unpkg';
-    return 'esm.sh';
   };
 
   const fetchAnalysis = async () => {
@@ -54,23 +32,14 @@ export function BundleAnalysis(props: BundleAnalysisProps) {
     setError(null);
     
     try {
-      const response = await fetch(`/_bundle/${encodeURIComponent(props.pkg)}`);
+      // Fetch from jsdelivr by default
+      const response = await fetch(`/_bundle/${encodeURIComponent(props.pkg)}?cdn=jsdelivr`);
       if (!response.ok) {
         throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
       }
       
       const data = await response.json();
-      
-      // Transform the data into our analysis format
-      const exports = data.exports || [];
-      const analysisData: ExportAnalysis[] = exports.map((exp: any) => ({
-        key: exp.key,
-        jsdelivr: exp.jsdelivr || null,
-        unpkg: exp.unpkg || null,
-        esmsh: exp.esmsh || null,
-      }));
-      
-      setAnalysis(analysisData);
+      setExports(data.exports || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch bundle analysis');
     } finally {
@@ -90,11 +59,11 @@ export function BundleAnalysis(props: BundleAnalysisProps) {
       {loading() && <div class={styles.loading}>Loading bundle analysis...</div>}
       {error() && <div class={styles.error}>Error: {error()}</div>}
       
-      {analysis() && analysis()!.length > 0 && (
+      {exports() && exports()!.length > 0 && (
         <div class={styles.results}>
           <div class={styles.summary}>
-            <h4>Bundle Size Comparison</h4>
-            <p>Showing {analysis()!.length} exports for {props.pkg}</p>
+            <h4>Exports for {props.pkg}</h4>
+            <p>Showing {exports()!.length} exports with bundle sizes</p>
           </div>
           
           <div class={styles.tableContainer}>
@@ -102,43 +71,22 @@ export function BundleAnalysis(props: BundleAnalysisProps) {
               <thead>
                 <tr>
                   <th>Export</th>
-                  <th>jsDelivr</th>
-                  <th>unpkg</th>
-                  <th>esm.sh</th>
-                  <th>Best CDN</th>
+                  <th>Transfer Size</th>
+                  <th>Raw Size</th>
                 </tr>
               </thead>
               <tbody>
-                <For each={analysis()}>
-                  {(exportData) => (
+                <For each={exports()}>
+                  {(exportItem) => (
                     <tr>
-                      <td class={styles.exportKey}>{exportData.key}</td>
+                      <td class={styles.exportKey}>{exportItem.key}</td>
                       <td class={styles.sizeCell}>
-                        {exportData.jsdelivr ? (
-                          <div>
-                            <div class={styles.sizeValue}>{formatSize(exportData.jsdelivr.bytes_transfer)}</div>
-                            <div class={styles.sizeDetail}>transfer</div>
-                          </div>
-                        ) : '-'}
+                        <div class={styles.sizeValue}>{formatSize(exportItem.bytes_transfer)}</div>
+                        <div class={styles.sizeDetail}>compressed</div>
                       </td>
                       <td class={styles.sizeCell}>
-                        {exportData.unpkg ? (
-                          <div>
-                            <div class={styles.sizeValue}>{formatSize(exportData.unpkg.bytes_transfer)}</div>
-                            <div class={styles.sizeDetail}>transfer</div>
-                          </div>
-                        ) : '-'}
-                      </td>
-                      <td class={styles.sizeCell}>
-                        {exportData.esmsh ? (
-                          <div>
-                            <div class={styles.sizeValue}>{formatSize(exportData.esmsh.bytes_transfer)}</div>
-                            <div class={styles.sizeDetail}>transfer</div>
-                          </div>
-                        ) : '-'}
-                      </td>
-                      <td class={styles.bestCdn}>
-                        <span class={styles.bestCdnBadge}>{getBestCDN(exportData)}</span>
+                        <div class={styles.sizeValue}>{formatSize(exportItem.bytes_raw)}</div>
+                        <div class={styles.sizeDetail}>uncompressed</div>
                       </td>
                     </tr>
                   )}
@@ -146,15 +94,10 @@ export function BundleAnalysis(props: BundleAnalysisProps) {
               </tbody>
             </table>
           </div>
-          
-          <div class={styles.note}>
-            <strong>Note:</strong> Transfer size is the compressed size served by CDN. 
-            This reflects actual network impact, not just file size.
-          </div>
         </div>
       )}
       
-      {analysis() && analysis()!.length === 0 && (
+      {exports() && exports()!.length === 0 && !loading() && (
         <div class={styles.empty}>
           <p>No bundle data available for {props.pkg}</p>
           <p>Try a different package or check the package name.</p>
