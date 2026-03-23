@@ -25,6 +25,7 @@ const SELECTORS = {
   measurementView: '[class*="measurementView"], [class*="MeasurementView"]',
   discoverResults: '[class*="discoverResults"], [class*="DiscoverResults"]',
   footer:          'footer, [class*="Footer"]',
+  banner:          '[class*="banner"], [class*="Banner"]',
 };
 
 async function capture(baseUrl, label) {
