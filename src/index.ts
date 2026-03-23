@@ -5,6 +5,7 @@ import { handleBundleHistory } from './handlers/bundle-history';
 import { handleDiscoverRequest } from './handlers/discover';
 import { handleRecordRequest } from './handlers/measurement';
 import { handleBannerRequest } from './handlers/banner';
+import { handleClearCache } from './handlers/clear-cache';
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -32,6 +33,10 @@ export default {
 
 		if (pathname.startsWith('/_banner/')) {
 			return handleBannerRequest(request, env, ctx);
+		}
+
+		if (pathname.startsWith('/_clear/')) {
+			return handleClearCache(request, env, ctx);
 		}
 
 		if (pathname.startsWith('/_/')) {

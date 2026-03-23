@@ -22,8 +22,15 @@
   margin-bottom: 1.5rem;
 }
 
+.summaryHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
 .summary h4 {
-  margin: 0 0 0.5rem 0;
+  margin: 0;
   font-size: 1.1rem;
 }
 
@@ -31,6 +38,33 @@
   margin: 0;
   color: var(--color-text-muted);
   font-size: 0.9rem;
+}
+
+.refreshTime {
+  margin-top: 0.25rem !important;
+  font-size: 0.8rem !important;
+  font-style: italic;
+}
+
+.refreshButton {
+  padding: 0.4rem 0.8rem;
+  font-family: 'Cascadia Code', monospace;
+  font-size: 0.8rem;
+  background: var(--color-accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.refreshButton:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.refreshButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .tableContainer {

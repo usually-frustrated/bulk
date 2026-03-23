@@ -16,6 +16,7 @@ export function BundleAnalysis(props: BundleAnalysisProps) {
   const [exports, setExports] = createSignal<ExportResult[] | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [lastRefreshed, setLastRefreshed] = createSignal<Date | null>(null);
 
   const formatSize = (bytes: number | null): string => {
     if (bytes === null || bytes === 0) return '-';
@@ -24,7 +25,7 @@ export function BundleAnalysis(props: BundleAnalysisProps) {
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
-  const fetchAnalysis = async () => {
+  const fetchAnalysis = async (refresh: boolean = false) => {
     if (!props.pkg.trim()) return;
     
     setLoading(true);
@@ -32,26 +33,23 @@ export function BundleAnalysis(props: BundleAnalysisProps) {
     setError(null);
     
     try {
-      // First try to discover package exports
-      const discoverResponse = await fetch(`/_discover/${encodeURIComponent(props.pkg)}`);
-      if (!discoverResponse.ok) {
-        throw new Error(`Failed to discover package: ${discoverResponse.status} ${discoverResponse.statusText}`);
+      // Build URL with optional refresh parameter
+      const url = `/_bundle/${encodeURIComponent(props.pkg)}?cdn=jsdelivr&exports${refresh ? '&refresh=true' : ''}`;
+      console.log('Fetching from:', url);
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch bundle sizes: ${response.status} ${response.statusText}`);
       }
       
-      const discoverData = await discoverResponse.json();
-      console.log('Discover data:', discoverData);
-      
-      // Then fetch bundle sizes for each export
-      const bundleResponse = await fetch(`/_bundle/${encodeURIComponent(props.pkg)}?cdn=jsdelivr&exports`);
-      if (!bundleResponse.ok) {
-        throw new Error(`Failed to fetch bundle sizes: ${bundleResponse.status} ${bundleResponse.statusText}`);
-      }
-      
-      const bundleData = await bundleResponse.json();
-      console.log('Bundle data:', bundleData);
+      const data = await response.json();
+      console.log('Bundle data:', data);
       
       // The response should have an exports array
-      setExports(bundleData.exports || []);
+      setExports(data.exports || []);
+      if (refresh) {
+        setLastRefreshed(new Date());
+      }
     } catch (err) {
       console.error('Fetch error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch bundle analysis');
@@ -59,6 +57,10 @@ export function BundleAnalysis(props: BundleAnalysisProps) {
       setLoading(false);
       props.onLoading(false);
     }
+  };
+
+  const handleRefresh = () => {
+    fetchAnalysis(true);
   };
 
   createEffect(() => {
@@ -75,8 +77,16 @@ export function BundleAnalysis(props: BundleAnalysisProps) {
       {exports() && exports()!.length > 0 && (
         <div class={styles.results}>
           <div class={styles.summary}>
-            <h4>Bundle sizes for {props.pkg}</h4>
+            <div class={styles.summaryHeader}>
+              <h4>Bundle sizes for {props.pkg}</h4>
+              <button class={styles.refreshButton} onClick={handleRefresh} disabled={loading()}>
+                {loading() ? 'Refreshing...' : 'Refresh Data'}
+              </button>
+            </div>
             <p>Showing {exports()!.length} exports from jsDelivr CDN</p>
+            {lastRefreshed() && (
+              <p class={styles.refreshTime}>Last refreshed: {lastRefreshed()!.toLocaleTimeString()}</p>
+            )}
           </div>
           
           <div class={styles.tableContainer}>
@@ -114,6 +124,9 @@ export function BundleAnalysis(props: BundleAnalysisProps) {
         <div class={styles.empty}>
           <p>No bundle data available for {props.pkg}</p>
           <p>The package might not have any exports or the CDN might not have it cached yet.</p>
+          <button class={styles.refreshButton} onClick={handleRefresh} disabled={loading()}>
+            {loading() ? 'Trying...' : 'Try Refreshing Data'}
+          </button>
         </div>
       )}
     </div>

@@ -14,10 +14,13 @@ async function handleSingleExport(
 	version: string,
 	exportKey: string,
 	cdn: CDN,
+	refresh: boolean = false,
 ): Promise<Response> {
-	const cached = await getCachedSize(pkg, version, exportKey, cdn, env);
-	if (cached) {
-		return Response.json({ package: pkg, version, export: exportKey, cdn, ...cached });
+	if (!refresh) {
+		const cached = await getCachedSize(pkg, version, exportKey, cdn, env);
+		if (cached) {
+			return Response.json({ package: pkg, version, export: exportKey, cdn, ...cached });
+		}
 	}
 
 	const exports = await getPackageExports(pkg, version, env);
@@ -43,13 +46,16 @@ async function handleAllExports(
 	pkg: string,
 	version: string,
 	cdn: CDN,
+	refresh: boolean = false,
 ): Promise<Response> {
 	const exports = await getPackageExports(pkg, version, env);
 
 	const results = await Promise.all(
 		exports.map(async (entry) => {
-			const cached = await getCachedSize(pkg, version, entry.key, cdn, env);
-			if (cached) return { key: entry.key, ...cached };
+			if (!refresh) {
+				const cached = await getCachedSize(pkg, version, entry.key, cdn, env);
+				if (cached) return { key: entry.key, ...cached };
+			}
 
 			const url = buildCdnUrl(pkg, version, entry.key, entry.path, cdn);
 			try {
@@ -100,14 +106,15 @@ export async function handleBundleRequest(
 
 	const pkg = parsed.package;
 	const wantsAllExports = url.searchParams.has('exports');
+	const refresh = url.searchParams.has('refresh');
 
 	try {
 		if (wantsAllExports) {
-			return await handleAllExports(request, env, ctx, pkg, version, cdnParam);
+			return await handleAllExports(request, env, ctx, pkg, version, cdnParam, refresh);
 		}
 
 		const exportKey = parsed.exportPath ?? 'index';
-		return await handleSingleExport(request, env, ctx, pkg, version, exportKey, cdnParam);
+		return await handleSingleExport(request, env, ctx, pkg, version, exportKey, cdnParam, refresh);
 	} catch (err: unknown) {
 		const status = (err as { status?: number }).status ?? 502;
 		return new Response(err instanceof Error ? err.message : 'CDN fetch failed', { status });
