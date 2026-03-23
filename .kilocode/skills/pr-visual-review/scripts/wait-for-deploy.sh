@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: bash wait-for-deploy.sh <BRANCH_ALIAS> [AFTER_TIMESTAMP]
 #
-# Polls `wrangler versions list` until a version with the given branch alias
+# Polls `bunx wrangler versions list` until a version with the given branch alias
 # appears that was created after AFTER_TIMESTAMP (ISO-8601, defaults to now).
 # Prints the Branch Preview URL on success and exits 0.
 # Exits 1 after timeout.
@@ -23,14 +23,11 @@ const fs = require('fs');
 const raw = fs.readFileSync('wrangler.jsonc','utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*/g,'');
 console.log(JSON.parse(raw).name);
 " 2>/dev/null)
-ACCOUNT_SUBDOMAIN=$(bunx wrangler whoami --json 2>/dev/null \
-  | bun -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log((d.displayName||d.email||'').replace(/[@.]/g,'-').toLowerCase())" \
-  || echo "")
 
 echo "Worker: ${WORKER_NAME}  alias: ${ALIAS}  waiting for version after ${AFTER}"
 
 for i in $(seq 1 "$MAX_ATTEMPTS"); do
-  # Get latest versions as JSON, strip the wrangler header line before the JSON array
+  # Get latest versions as JSON using bunx wrangler
   RAW=$(bunx wrangler versions list --json 2>&1)
   FOUND=$(echo "$RAW" | bun -e "
     const lines = require('fs').readFileSync('/dev/stdin','utf8');
@@ -52,7 +49,6 @@ for i in $(seq 1 "$MAX_ATTEMPTS"); do
   if [ -n "$FOUND" ]; then
     VERSION_ID=$(echo "$FOUND" | cut -d' ' -f1)
     # Branch preview URL pattern: https://<alias>-<worker>.<subdomain>.workers.dev
-    # The alias in the URL has slashes replaced with hyphens (already the case for branch names)
     PREVIEW_URL="https://${ALIAS}-${WORKER_NAME}.sushruth-sastry.workers.dev"
     echo "Deployed! Version: ${VERSION_ID}"
     echo "Preview URL: ${PREVIEW_URL}"
