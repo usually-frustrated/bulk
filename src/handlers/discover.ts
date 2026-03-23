@@ -8,7 +8,7 @@ import { parseExports } from '../utils/cdn';
  * Returns paths like "dist/index.mjs" (no leading slash).
  */
 async function fetchPackageFiles(pkg: string, version: string): Promise<string[]> {
-  const url = `https://data.jsdelivr.com/v1/packages/npm/${pkg}@${version}/flat`;
+  const url = `https://data.jsdelivr.com/v1/package/npm/${pkg}@${version}/flat`;
   const res = await fetch(url);
   if (!res.ok) return [];
   const data: { files?: { name: string }[] } = await res.json();
@@ -22,7 +22,10 @@ async function fetchPackageFiles(pkg: string, version: string): Promise<string[]
  * Input: "dist/*.mjs"  →  /^dist\/(.+)\.mjs$/
  */
 function wildcardToRegex(pattern: string): RegExp {
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace('\\*', '(.+)');
+  // Escape regex specials except *, then replace * with a capture group
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escapes . but NOT *
+    .replace(/\*/g, '(.+)');               // now replace the literal *
   return new RegExp(`^${escaped}$`);
 }
 
@@ -99,7 +102,9 @@ export async function handleDiscoverRequest(
     const resolvedVersion: string = pkgJson.version ?? version;
     const exports = parseExports(pkgJson);
 
-    const staticExports = exports.filter((e) => !e.key.includes('*'));
+    const staticExports = exports.filter(
+      (e) => !e.key.includes('*') && e.key !== 'package.json',
+    );
     const wildcardExports = exports.filter((e) => e.key.includes('*'));
 
     let expanded: { key: string; path: string }[] = [];
@@ -111,10 +116,14 @@ export async function handleDiscoverRequest(
       }
     }
 
+    // Deduplicate: static exports take precedence over wildcard-expanded ones
+    const existingKeys = new Set(staticExports.map((e) => e.key));
+    const uniqueExpanded = expanded.filter((e) => !existingKeys.has(e.key));
+
     return Response.json({
       package: pkg,
       version: resolvedVersion,
-      exports: [...staticExports, ...expanded],
+      exports: [...staticExports, ...uniqueExpanded],
       wildcardResolved: expanded.length > 0,
     });
   } catch (err: unknown) {
