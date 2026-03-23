@@ -1,5 +1,5 @@
 .bundleAnalysis {
-  margin-top: 1.5rem;
+  margin-top: 0.5rem;
   position: relative;
 
   &::before {
@@ -29,30 +29,30 @@
 }
 
 .summary {
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .summaryHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.1rem;
 }
 
 .summary h4 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .summary p {
   margin: 0;
   color: var(--color-text-muted);
-  font-size: 0.9rem;
+  font-size: 0.75rem;
 }
 
 .refreshTime {
-  margin-top: 0.25rem !important;
-  font-size: 0.8rem !important;
+  font-size: 0.7rem !important;
   font-style: italic;
 }
 
@@ -84,12 +84,12 @@
 .analysisTable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.75rem;
 }
 
 .analysisTable th {
   text-align: left;
-  padding: 0.75rem 1rem;
+  padding: 0.2rem 0.5rem;
   background: color-mix(in srgb, var(--color-text) 5%, var(--color-bg));
   border-bottom: 1px solid var(--color-border);
   font-weight: 600;
@@ -97,7 +97,7 @@
 }
 
 .analysisTable td {
-  padding: 0.75rem 1rem;
+  padding: 0.15rem 0.5rem;
   border-bottom: 1px solid var(--color-border-light);
 }
 
@@ -125,13 +125,12 @@
 
 .sizeValue {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.75rem;
 }
 
 .sizeDetail {
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   color: var(--color-text-muted);
-  margin-top: 0.25rem;
 }
 
 .bestCdn {

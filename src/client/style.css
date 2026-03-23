@@ -74,37 +74,37 @@ h6 {
 	--color-border: #d0d0d0;
 	--color-border-light: rgba(208, 208, 208, 0.3);
 
-	--spacing-page-padding: 1.5rem;
-	--spacing-main-block: 2rem 1rem;
-	--spacing-section-block: 0.75rem 1rem;
-	--spacing-section-gap: 1rem;
-	--spacing-hero-block: 1.5rem 1rem;
-	--spacing-hero-inline-offset: -1rem;
+	--spacing-page-padding: 1rem;
+	--spacing-main-block: 0.5rem 1rem;
+	--spacing-section-block: 0.25rem 0;
+	--spacing-section-gap: 0.25rem;
+	--spacing-hero-block: 0.25rem 0;
+	--spacing-hero-inline-offset: 0;
 
-	--spacing-heading-bottom: 0.25rem;
-	--spacing-tagline-bottom: 1.5rem;
-	--spacing-code-block: 0.5rem 0;
-	--spacing-label-bottom: 0.5rem;
-	--spacing-preview-top: 0.75rem;
+	--spacing-heading-bottom: 0;
+	--spacing-tagline-bottom: 0.5rem;
+	--spacing-code-block: 0.25rem 0;
+	--spacing-label-bottom: 0.25rem;
+	--spacing-preview-top: 0.25rem;
 
-	--spacing-input-inline: 0.75rem;
-	--spacing-input-block: 0.625rem;
-	--spacing-input-block-mobile: 0.625rem;
-	--spacing-input-inline-mobile: 0.625rem;
-	--spacing-button-inline: 1rem;
-	--spacing-button-block: 0.625rem;
-	--spacing-button-inline-mobile: 0.875rem;
-	--spacing-button-block-mobile: 0.625rem;
+	--spacing-input-inline: 0.5rem;
+	--spacing-input-block: 0.25rem;
+	--spacing-input-block-mobile: 0.25rem;
+	--spacing-input-inline-mobile: 0.5rem;
+	--spacing-button-inline: 0.75rem;
+	--spacing-button-block: 0.25rem;
+	--spacing-button-inline-mobile: 0.75rem;
+	--spacing-button-block-mobile: 0.25rem;
 
-	--font-size-heading: 3rem;
-	--font-size-tagline: 0.875rem;
-	--font-size-code: 0.875rem;
+	--font-size-heading: 1.25rem;
+	--font-size-tagline: 0.75rem;
+	--font-size-code: 0.75rem;
 	--font-size-label: 0.75rem;
 	--font-size-input: 0.75rem;
 	--font-size-button: 0.75rem;
-	--font-size-providers: 0.8125rem;
+	--font-size-providers: 0.75rem;
 
-	--font-size-heading-mobile: 2.4rem;
+	--font-size-heading-mobile: 1.1rem;
 	--font-size-tagline-mobile: 0.7rem;
 	--font-size-code-mobile: 0.7rem;
 	--font-size-label-mobile: 0.65rem;
@@ -133,7 +133,7 @@ body {
 	color: var(--color-text);
 	min-height: 100vh;
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	justify-content: center;
 	overflow-x: hidden;
 	padding: 0 var(--spacing-page-padding);
@@ -143,7 +143,7 @@ main {
 	width: 100%;
 	max-width: 800px;
 	padding: var(--spacing-main-block);
-	text-align: center;
+	text-align: left;
 }
 
 .hero-section {

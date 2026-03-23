@@ -1,6 +1,5 @@
 .pkgInputWrap {
 	padding: var(--spacing-section-block);
-	text-align: left;
 	margin-bottom: var(--spacing-section-gap);
 }
 
@@ -81,8 +80,7 @@
 }
 
 .badgePreview {
-	margin: 2rem 0;
-	text-align: center;
+	margin: 0.5rem 0;
 }
 
 .badgePreview img {
