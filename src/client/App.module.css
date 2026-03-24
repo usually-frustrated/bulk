@@ -114,6 +114,8 @@
 
 .suggestions {
 	margin-top: 0.4rem;
+	max-width: 100%;
+	overflow: hidden;
 }
 
 .suggestLabel {
