@@ -1,8 +1,6 @@
 import { createSignal, createEffect, on, Show, For, onMount, batch } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
-import { LoadingOverlay } from './components/LoadingOverlay';
-import { BundleHistory } from './components/BundleHistory';
 import { Waterfall } from './components/Waterfall';
 import { OutputTabs } from './components/OutputTabs';
 import { BadgeGenerator } from './components/BadgeGenerator';
@@ -189,12 +187,6 @@ export function App() {
 	// Auto-measure on initial load only when query params are present.
 	onMount(() => { if (getQueryParam('pkg') !== null) void handleMeasure(); });
 
-	// ── Loading overlay (for BundleHistory only) ────────────────────────────────
-
-	const [loadingCount, setLoadingCount] = createSignal(0);
-	const loading = () => loadingCount() > 0;
-	const handleLoading = (v: boolean) => setLoadingCount((c) => Math.max(0, c + (v ? 1 : -1)));
-
 	// ── Render ──────────────────────────────────────────────────────────────────
 
 	return (
@@ -291,21 +283,9 @@ export function App() {
 					<BadgeGenerator pkg={firstPkg} />
 				</Show>
 
-				{/* ── Version history ─────────────────────────────────────── */}
-				<BundleHistory
-					pkg={firstPkg()}
-					onLoading={handleLoading}
-					selectedExport={selectedExport()}
-					onExportChange={(k) => setSelectedExport(k)}
-					exports={discoverData()?.exports ?? null}
-				/>
 			</div>
 
-			<Footer />
-
-			<Show when={loading()}>
-				<LoadingOverlay />
-			</Show>
-		</main>
+		<Footer />
+	</main>
 	);
 }

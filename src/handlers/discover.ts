@@ -49,6 +49,38 @@ export async function handleDiscoverRequest(
   try {
     const pkgJson = await fetchPackageMetadata(pkg, version);
     const resolvedVersion: string = pkgJson.version ?? version;
+
+    // If no exports field, show all JS files from the tarball
+    if (!pkgJson.exports) {
+      const files = await fetchPackageFiles(pkg, resolvedVersion);
+      const jsFiles = files.filter((f) => /\.(js|mjs|cjs)$/.test(f));
+
+      if (jsFiles.length > 0) {
+        // Deduplicate by stem, prefer .mjs > .js > .cjs
+        const extRank: Record<string, number> = { mjs: 0, js: 1, cjs: 2 };
+        const byKey = new Map<string, string>();
+        for (const f of jsFiles) {
+          const ext = f.match(/\.(mjs|js|cjs)$/)?.[1] ?? 'js';
+          const stem = f.replace(/\.(mjs|js|cjs)$/, '');
+          const existing = byKey.get(stem);
+          const existingExt = existing?.match(/\.(mjs|js|cjs)$/)?.[1] ?? 'js';
+          if (!existing || (extRank[ext] ?? 3) < (extRank[existingExt] ?? 3)) {
+            byKey.set(stem, f);
+          }
+        }
+        const fileExports = Array.from(byKey.entries()).map(([stem, file]) => ({
+          key: stem === 'index' ? 'index' : stem,
+          path: `./${file}`,
+        }));
+        return Response.json({
+          package: pkg,
+          version: resolvedVersion,
+          exports: fileExports,
+          wildcardResolved: false,
+        });
+      }
+    }
+
     const exports = parseExports(pkgJson);
 
     const staticExports = exports.filter(

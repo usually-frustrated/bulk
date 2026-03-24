@@ -193,7 +193,6 @@
 
 .results {
 	margin: var(--spacing-section-block);
-	border-top: 1px solid var(--color-border);
 	padding-top: 0.5rem;
 }
 
