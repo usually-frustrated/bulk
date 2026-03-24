@@ -86,27 +86,19 @@ export function App() {
 	}
 
 	// ── URL sync (pkg) ──────────────────────────────────────────────────────────
-	// Syncs the committed pkg to ?pkg= (debounced to avoid thrashing history).
+	// Called explicitly inside handleMeasure — URL only changes on button click.
 
-	let urlSyncTimer: number | undefined;
-	createEffect(() => {
-		const p = firstPkg();
-		if (urlSyncTimer) window.clearTimeout(urlSyncTimer);
-		urlSyncTimer = window.setTimeout(() => {
-			const params = new URLSearchParams(window.location.search);
-			if (p && p !== 'react') {
-				params.set('pkg', p);
-			} else {
-				params.delete('pkg');
-			}
-			params.delete('export');
-			const qs = params.toString();
-			history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
-		}, 400);
-	});
-	onCleanup(() => {
-		if (urlSyncTimer) window.clearTimeout(urlSyncTimer);
-	});
+	function syncPkgParam(p: string) {
+		const params = new URLSearchParams(window.location.search);
+		if (p && p !== 'react') {
+			params.set('pkg', p);
+		} else {
+			params.delete('pkg');
+		}
+		params.delete('export');
+		const qs = params.toString();
+		history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+	}
 
 	// ── Discovery (suggestions) ────────────────────────────────────────────────
 	// Driven by the draft input so chips update as the user types.
@@ -146,10 +138,11 @@ export function App() {
 	// Commits the draft input, then runs browser measurement.
 
 	const handleMeasure = async () => {
-		// Commit the draft input before measuring.
+		// Commit the draft input before measuring and sync URL.
 		commitPkg();
 		const pkgName = parseInput(pkgInput()).pkg;
 		if (!pkgName) return;
+		syncPkgParam(pkgName);
 
 		batch(() => {
 			setMeasuring(true);
