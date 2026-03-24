@@ -168,6 +168,15 @@
 	padding-top: 0.5rem;
 }
 
+.spinner {
+	font-size: var(--font-size-heading);
+	line-height: 1;
+	display: block;
+	padding: var(--spacing-section-block) 0;
+	animation: spinDecel 2s linear infinite;
+	will-change: transform;
+}
+
 .note {
 	margin: var(--spacing-note-margin) 0;
 	padding: var(--spacing-note-block) 0;

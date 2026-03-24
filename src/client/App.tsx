@@ -1,4 +1,4 @@
-import { createSignal, createEffect, on, Show, For, onCleanup, batch } from 'solid-js';
+import { createSignal, createEffect, on, Show, For, onCleanup, onMount, batch } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LoadingOverlay } from './components/LoadingOverlay';
@@ -218,10 +218,13 @@ export function App() {
 		setMeasuredEntries(null);
 	}, { defer: true }));
 
-	// ── Loading overlay (for BundleHistory) ────────────────────────────────────
+	// Auto-measure on initial load.
+	onMount(() => { void handleMeasure(); });
+
+	// ── Loading overlay (for BundleHistory only) ────────────────────────────────
 
 	const [loadingCount, setLoadingCount] = createSignal(0);
-	const loading = () => loadingCount() > 0 || measuring();
+	const loading = () => loadingCount() > 0;
 	const handleLoading = (v: boolean) => setLoadingCount((c) => Math.max(0, c + (v ? 1 : -1)));
 
 	// ── Render ──────────────────────────────────────────────────────────────────
@@ -261,14 +264,6 @@ export function App() {
 						</div>
 					</div>
 
-					<button
-						class={styles.measureBtn}
-						onClick={handleMeasure}
-						disabled={measuring()}
-					>
-						{measuring() ? 'measuring…' : 'measure'}
-					</button>
-
 					{/* Suggestions from /_discover — shown as soon as discover data
 					    matches the current draft input (updates as you type). */}
 					<Show when={discoverData() && discoverPkg() === firstPkgInput()}>
@@ -306,7 +301,12 @@ export function App() {
 				</Show>
 
 				{/* ── Results: waterfall + output tabs ───────────────────── */}
-				<Show when={resources() !== null && measuredEntries() !== null}>
+				<Show when={measuring()}>
+					<section class={styles.results}>
+						<span class={styles.spinner} aria-hidden="true">✜</span>
+					</section>
+				</Show>
+				<Show when={!measuring() && resources() !== null && measuredEntries() !== null}>
 					<section class={styles.results}>
 						<Waterfall resources={resources()!} />
 						<OutputTabs
