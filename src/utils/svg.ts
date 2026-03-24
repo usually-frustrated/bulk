@@ -101,6 +101,13 @@ export function generateBadgeSvg(label: string, value: string, confidence: Confi
 // Width: 520px  Height: 64px
 // Use: ![](https://bulk.frustrated.dev/_banner/standard/zustand)
 
+export interface BannerResource {
+	url:          string;
+	startTime:    number;
+	responseEnd:  number;
+	transferSize: number | null;
+}
+
 export interface BannerData {
 	pkg:         string;
 	version:     string;
@@ -115,23 +122,35 @@ export interface BannerData {
 	fileCount?:  number;
 	roundTrips?: number;
 	durationMs?: number;
+	// per-resource timings for waterfall rendering
+	resources?:  BannerResource[];
+}
+
+// Truncate a resource URL to a short filename for waterfall row labels.
+function waterfallFilename(url: string, maxLen = 22): string {
+	try {
+		const u = new URL(url);
+		const parts = u.pathname.split('/').filter(Boolean);
+		const name = parts[parts.length - 1] || u.hostname;
+		return name.length > maxLen ? name.slice(0, maxLen - 1) + '…' : name;
+	} catch {
+		return url.slice(0, maxLen);
+	}
 }
 
 export function generateStandardBanner(d: BannerData): string {
-	const W    = 520;
-	const H1   = BANNER_H;      // header row height
-	const H2   = 36;            // stats row height
-	const H    = H1 + H2;
-	const PAD  = 10;
+	const W   = 520;
+	const H1  = BANNER_H; // header row = 28px
+	const PAD = 10;
 
-	const sizeStr = d.isError   ? (d.errorMsg ?? 'error')
-	              : d.bytes === null ? 'measuring…'
+	const sizeStr = d.isError        ? (d.errorMsg ?? 'error')
+	              : d.bytes === null  ? 'measuring…'
 	              : formatSize(d.bytes);
-	const sizeCol = d.isError   ? C.red
-	              : d.bytes === null ? C.label
+	const sizeCol = d.isError        ? C.red
+	              : d.bytes === null  ? C.label
 	              : C.green;
 
-	// ── header pills (CDN, ESM, UMD) ───────────────────────────────────────
+	// ── header pills (CDN, ESM, UMD) ────────────────────────────────────────
 	const pills: Array<{ text: string; color: string }> = [
 		{ text: d.cdn, color: C.accent },
 		...(d.hasEsm ? [{ text: 'ESM', color: C.green }] : []),
@@ -147,25 +166,15 @@ export function generateStandardBanner(d: BannerData): string {
   <text x="${pillX + pw / 2}" y="18" text-anchor="middle" font-size="10" fill="${p.color}" font-family="${FONT}">${esc(p.text)}</text>`);
 	}
 
-	// ── header left: pkg@version ────────────────────────────────────────────
-	const pkgLabel = `${esc(d.pkg)}`;
+	const pkgLabel = esc(d.pkg);
 	const verLabel = `@${esc(d.version)}`;
 
-	// ── stats row: size bar + metrics ───────────────────────────────────────
+	// ── stat items (shared by both layout paths) ─────────────────────────────
 	const exportsLabel  = `${d.exportCount} export${d.exportCount !== 1 ? 's' : ''}`;
 	const filesLabel    = d.fileCount  != null ? `${d.fileCount} file${d.fileCount !== 1 ? 's' : ''}` : null;
 	const tripsLabel    = d.roundTrips != null ? `${d.roundTrips} round trip${d.roundTrips !== 1 ? 's' : ''}` : null;
 	const durationLabel = d.durationMs != null ? `${d.durationMs.toFixed(0)} ms` : null;
 
-	// Visual size bar (up to 80% of available width)
-	const barMaxW = W - PAD * 2;
-	// Rough reference: 500 kB = full bar
-	const barW = d.bytes != null
-		? Math.min(barMaxW, Math.round((d.bytes / (500 * 1024)) * barMaxW))
-		: 0;
-	const barY = H1 + 10;
-
-	// Stat items inline
 	const statItems: Array<{ label: string; color: string }> = [
 		{ label: sizeStr, color: sizeCol },
 		{ label: exportsLabel, color: C.label },
@@ -174,19 +183,22 @@ export function generateStandardBanner(d: BannerData): string {
 		...(durationLabel ? [{ label: durationLabel, color: C.label }] : []),
 	];
 
-	let statX = PAD;
-	const statEls: string[] = [];
-	for (let i = 0; i < statItems.length; i++) {
-		const s = statItems[i];
-		statEls.push(`<text x="${statX}" y="${H1 + 28}" font-family="${FONT}" font-size="10" fill="${s.color}">${esc(s.label)}</text>`);
-		statX += tw(s.label) + 6;
-		if (i < statItems.length - 1) {
-			statEls.push(`<text x="${statX}" y="${H1 + 28}" font-family="${FONT}" font-size="10" fill="${C.border}">·</text>`);
-			statX += tw('·') + 6;
+	function renderStatLine(y: number): string {
+		let x = PAD;
+		const els: string[] = [];
+		for (let i = 0; i < statItems.length; i++) {
+			const s = statItems[i];
+			els.push(`<text x="${x}" y="${y}" font-family="${FONT}" font-size="10" fill="${s.color}">${esc(s.label)}</text>`);
+			x += tw(s.label) + 6;
+			if (i < statItems.length - 1) {
+				els.push(`<text x="${x}" y="${y}" font-family="${FONT}" font-size="10" fill="${C.border}">·</text>`);
+				x += tw('·') + 6;
+			}
 		}
+		return els.join('\n  ');
 	}
 
-	return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(d.pkg)} ${sizeStr}">
+	const svgHeader = (H: number) => `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(d.pkg)} ${sizeStr}">
   <title>${esc(d.pkg)}@${esc(d.version)} · ${esc(d.cdn)} · ${esc(sizeStr)}</title>
   <!-- card background -->
   <rect width="${W}" height="${H}" rx="${R}" fill="${C.bg}"/>
@@ -195,15 +207,77 @@ export function generateStandardBanner(d: BannerData): string {
   <rect width="${W}" height="${H1}" rx="${R}" fill="${C.panel}"/>
   <rect y="${H1 - R}" width="${W}" height="${R}" fill="${C.panel}"/>
   <line x1="0" y1="${H1}" x2="${W}" y2="${H1}" stroke="${C.border}" stroke-width=".5"/>
-  <!-- pkg name (bold) + version (muted) -->
+  <!-- pkg name + version -->
   <text x="${PAD}" y="19" font-family="${FONT}" font-size="12" fill="${C.value}" font-weight="bold">${pkgLabel}<tspan fill="${C.label}" font-weight="normal">${verLabel}</tspan></text>
   <!-- pills -->
-  ${pillEls.join('')}
+  ${pillEls.join('')}`;
+
+	// ── Waterfall layout (when per-resource timing data is available) ─────────
+	const resources = d.resources && d.resources.length > 0 ? d.resources : null;
+	if (resources) {
+		const STATS_H = 18; // compact stats text row
+		const ROW_H   = 13; // height of each waterfall row
+		const H = H1 + STATS_H + resources.length * ROW_H + 5;
+
+		const sorted = [...resources].sort((a, b) => a.startTime - b.startTime);
+		const t0     = sorted[0].startTime;
+		const tMax   = Math.max(...sorted.map((r) => r.responseEnd));
+		const span   = Math.max(1, tMax - t0);
+
+		// Label column | bar track
+		const LABEL_W = 145;
+		const BAR_X   = PAD + LABEL_W;
+		const BAR_W   = W - BAR_X - PAD;
+
+		// Assign round-trip colours (new round when gap > 5 ms)
+		const roundColors = [C.accent, C.green, C.yellow, C.red];
+		let currentRound = 0;
+		const resourceRounds: number[] = [0];
+		for (let i = 1; i < sorted.length; i++) {
+			if (sorted[i].startTime - sorted[i - 1].startTime > 5) currentRound++;
+			resourceRounds.push(Math.min(currentRound, roundColors.length - 1));
+		}
+
+		const rowEls: string[] = [];
+		for (let i = 0; i < sorted.length; i++) {
+			const r      = sorted[i];
+			const rowY   = H1 + STATS_H + i * ROW_H;
+			const barL   = ((r.startTime - t0) / span) * BAR_W;
+			const barW   = Math.max(3, ((r.responseEnd - r.startTime) / span) * BAR_W);
+			const color  = roundColors[resourceRounds[i]];
+			const name   = waterfallFilename(r.url);
+			const rowBg  = i % 2 !== 0 ? `<rect x="0" y="${rowY}" width="${W}" height="${ROW_H}" fill="${C.panel}" fill-opacity=".5"/>` : '';
+			rowEls.push(`${rowBg}
+  <text x="${PAD}" y="${rowY + ROW_H - 3}" font-family="${FONT}" font-size="9.5" fill="${C.label}">${esc(name)}</text>
+  <rect x="${(BAR_X + barL).toFixed(1)}" y="${rowY + 2}" width="${barW.toFixed(1)}" height="${ROW_H - 4}" rx="1.5" fill="${color}" fill-opacity=".8"/>`);
+		}
+
+		return `${svgHeader(H)}
+  <!-- stats line -->
+  ${renderStatLine(H1 + 13)}
+  <line x1="0" y1="${H1 + STATS_H}" x2="${W}" y2="${H1 + STATS_H}" stroke="${C.border}" stroke-width=".5"/>
+  <!-- label / bar divider -->
+  <line x1="${BAR_X}" y1="${H1 + STATS_H}" x2="${BAR_X}" y2="${H}" stroke="${C.border}" stroke-width=".5" stroke-opacity=".4"/>
+  <!-- waterfall rows -->
+  ${rowEls.join('\n  ')}
+</svg>`.trim();
+	}
+
+	// ── Fallback: no resource data → compact bar + stats ─────────────────────
+	const H2 = 36;
+	const H  = H1 + H2;
+	const barMaxW = W - PAD * 2;
+	const barW    = d.bytes != null
+		? Math.min(barMaxW, Math.round((d.bytes / (500 * 1024)) * barMaxW))
+		: 0;
+	const barY = H1 + 10;
+
+	return `${svgHeader(H)}
   <!-- stats row: size bar -->
   <rect x="${PAD}" y="${barY}" width="${barMaxW}" height="4" rx="2" fill="${C.border}" fill-opacity=".4"/>
   <rect x="${PAD}" y="${barY}" width="${barW}" height="4" rx="2" fill="${sizeCol}" fill-opacity=".7"/>
   <!-- stats row: text metrics -->
-  ${statEls.join('\n  ')}
+  ${renderStatLine(H1 + 28)}
 </svg>`.trim();
 }
 

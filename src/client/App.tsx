@@ -158,11 +158,20 @@ export function App() {
 		});
 
 		try {
-			// 1. Resolve version + exports via /_discover
-			const res0 = await fetch(`/_discover/${encodeURIComponent(pkgName)}`);
-			if (!res0.ok) throw new Error(`Could not resolve ${pkgName}: ${res0.statusText}`);
-			const dr = (await res0.json()) as DiscoverResult;
-			setDiscoverData(dr);
+			// 1. Resolve version + exports via /_discover.
+			// Skip re-fetch if we already have data for the same package — this
+			// prevents the <For>-rendered options from re-rendering and losing the
+			// controlled <select> value.
+			const existing = discoverData();
+			let dr: DiscoverResult;
+			if (existing?.package === pkgName) {
+				dr = existing;
+			} else {
+				const res0 = await fetch(`/_discover/${encodeURIComponent(pkgName)}`);
+				if (!res0.ok) throw new Error(`Could not resolve ${pkgName}: ${res0.statusText}`);
+				dr = (await res0.json()) as DiscoverResult;
+				setDiscoverData(dr);
+			}
 
 			// 2. Single measurement entry: package + selected export
 			const exportKey = selectedExport() || 'index';

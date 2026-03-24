@@ -213,6 +213,46 @@ export async function getMeasuredSize(
 	};
 }
 
+// ─── latest resource timings (for banner waterfall) ─────────────────────────
+
+export interface ResourceTimingRow {
+	url:               string;
+	transfer_size:     number | null;
+	decoded_body_size: number | null;
+	start_time:        number;
+	response_end:      number;
+}
+
+/**
+ * Return all resource timing entries from the most recent measurement session
+ * for the given package/version/export/cdn combination.
+ * Uses the MAX(timestamp) to identify the latest session (batched INSERTs share
+ * the same second-precision datetime value).
+ */
+export async function getLatestResourceTimings(
+	pkg: string,
+	version: string,
+	exportKey: string,
+	cdn: CDN,
+	env: Env,
+): Promise<ResourceTimingRow[]> {
+	const rows = await env.DB.prepare(
+		`SELECT url, transfer_size, decoded_body_size, start_time, response_end
+		 FROM resource_timings
+		 WHERE package = ? AND version = ? AND export_key = ? AND cdn = ?
+		   AND timestamp = (
+		     SELECT MAX(timestamp)
+		     FROM resource_timings
+		     WHERE package = ? AND version = ? AND export_key = ? AND cdn = ?
+		   )
+		 ORDER BY start_time
+		 LIMIT 50`,
+	)
+		.bind(pkg, version, exportKey, cdn, pkg, version, exportKey, cdn)
+		.all<ResourceTimingRow>();
+	return rows.results;
+}
+
 // ─── version history list ────────────────────────────────────────────────────
 
 export interface VersionEntry {
