@@ -1,7 +1,14 @@
 # AGENTS
 
+> **CRITICAL — ALL AGENTS MUST FOLLOW THIS RULE:**
+> After every session that changes code, discovers new behaviour, finds a bug, or corrects a wrong statement in this file, you MUST update AGENTS.md before pushing. Add new sections, update stale ones, and correct any inaccuracies. This file is the shared memory of the repo.
+
+---
+
 ## ∑ stack
 CF Worker · SolidJS · Bun · Wrangler · TypeScript · D1(SQLite) · vitest
+
+---
 
 ## ⌂ layout
 ```
@@ -12,138 +19,260 @@ src/providers.ts          ← jsdelivr(dflt)|unpkg|skypack|esm.sh → {id,name,u
 src/handlers/
   badge.ts                ← HEAD cdn → size → SVG · CF cache · telemetry
   bundle.ts               ← /_bundle/* · single/all-exports · D1 cache
-  bundle-history.ts       ← /_bundle-history/* · all versions → sizes → JSON
-  discover.ts             ← /_discover/* · package.json export discovery
+  bundle-history.ts       ← /_bundle-history/* · all versions → sizes → JSON (legacy; not used by UI anymore)
+  versions.ts             ← /_versions/<pkg> · cheap version-list only (NEW)
+  discover.ts             ← /_discover/* · package.json export discovery + tarball fallback
   measurement.ts          ← /_record (POST) · save browser resource timings
-  banner.ts               ← /_banner/* · OG banner generation
+  banner.ts               ← /_banner/(compact|standard|full)/<pkg> · real data from DB
   clear-cache.ts          ← /_clear/* · invalidate cached sizes
 src/utils/
   pkg.ts                  ← parsePath · buildCacheControl · isImmutableVersion
-  svg.ts                  ← generateBadgeSvg(label,val,isErr)→SVG string
+  svg.ts                  ← generateBadgeSvg · generateStandardBanner · generateFullBanner
   size.ts                 ← formatSize(bytes)→"1.2 kB"
   cdn.ts                  ← buildCdnUrl · measureSize(HEAD→GET fallback) · parseExports
-  db.ts                   ← resolveVersion · getPackageExports · getCachedSize · saveSize
+  db.ts                   ← resolveVersion · getPackageExports · getCachedSize · getMeasuredSize · saveSize · getVersionList
   telemetry.ts            ← Telemetry.{info|warn|error|logAsync}
   bundle-parse.ts         ← parseBundlePath("/_bundle/<pkg>[@ver][/export]")
+  wildcard.ts             ← fetchPackageFiles · expandWildcard (jsDelivr flat API)
 src/client/
   main.tsx                ← SolidJS mount → #root
-  App.tsx                 ← state(pkgInput,pkg,cdn,selectedExport) · two-signal input model
+  App.tsx                 ← full app state · two-signal input model · dirty-state UI
   style.css               ← reset + CSS vars (light/dark) + layout
   index.html              ← links /_/styles.css · loads /main.js
+  utils/
+    measurement.ts        ← buildImportmapUrl · measurePackages (iframe) · getBrowserInfo
   components/
     Header.tsx            ← title + logo
-    ExportsTable.tsx      ← fetch npm registry → badge URLs · copy-to-clipboard
-    BundleHistory.tsx     ← SVG line chart · tooltip · calls /_bundle-history/*
+    BundleHistory.tsx     ← SVG line chart · hollow/filled dots · on-demand size fetch
+    Waterfall.tsx         ← network round-trip waterfall · groups by startTime gap
+    OutputTabs.tsx        ← importmap JSON · import URLs · UMD script tag
+    BadgeGenerator.tsx    ← badge + banner preview · copy-url buttons
     Footer.tsx            ← links/credits
-    LoadingOverlay.tsx    ← shown during fetch
-    BadgeGenerator.tsx    ← badge URL input/display
-    UsageInfo.tsx         ← usage docs
-migrations/0001_bundle_schema.sql ← D1 schema (5 tables)
+    LoadingOverlay.tsx    ← exists as file but NO LONGER USED in App.tsx (removed)
+migrations/0001_bundle_schema.sql ← D1 schema (5 tables + resource_timings)
 build-client.ts           ← Bun.build(main.tsx,minify,SolidPlugin)→public/
 wrangler.jsonc            ← main=src/index.ts · assets=./public · D1 binding · observability
 ```
 
+---
+
 ## ⇒ routing (src/index.ts)
 ```
-/favicon.ico             → 404   (prevent catch-all treating it as a package)
-/_/<static>              → env.ASSETS.fetch(request)  [CSS, JS, images; checked before API]
+/favicon.ico                        → 404
+/_/<static>                         → env.ASSETS.fetch  [CSS, JS, images]
 
-── Analysis API ──────────────────────────────────────────────────────────────
-/_bundle-history/<pkg>[/<export>]  → handleBundleHistory   (version size trends)
-/_bundle/<pkg>[@ver][/<export>]    → handleBundleRequest    (single/all-export sizes)
-/_discover/<pkg>                   → handleDiscoverRequest  (export discovery)
-/_record  (POST)                   → handleRecordRequest    (browser timing ingestion)
-
-── Utility ───────────────────────────────────────────────────────────────────
-/_banner/<pkg>                     → handleBannerRequest    (OG banner)
-/_clear/<pkg>                      → handleClearCache       (invalidate D1 cache)
+── API ───────────────────────────────────────────────────────────────────────
+/_bundle-history/<pkg>[/<export>]   → handleBundleHistory   (legacy; not called by UI)
+/_versions/<pkg>                    → handleVersionsRequest  (version list only, cheap)
+/_bundle/<pkg>[@ver][/<export>]     → handleBundleRequest    (single/all-export sizes)
+/_discover/<pkg>                    → handleDiscoverRequest  (export discovery)
+/_record  (POST)                    → handleRecordRequest    (browser timing ingestion)
+/_banner/(compact|standard|full)/<pkg>[@ver] → handleBannerRequest (SVG banner)
+/_clear/<pkg>                       → handleClearCache
 
 ── Catch-all ─────────────────────────────────────────────────────────────────
-/*                                 → handleBadgeRequest     (SVG size badge)
+/*                                  → handleBadgeRequest    (SVG size badge)
 ```
-Key ordering rule: `/_bundle-history/` before `/_bundle/` (prefix collision).
+Key ordering rule: `/_bundle-history/` before `/_bundle/`; `/_versions/` between them.
 Static assets `/_/` are checked before any API route.
 
+---
+
 ## 🖥 client input model (App.tsx)
-Two separate signals drive the package input:
-```
-pkgInput  (draft)   ← updated on every keystroke via onInput
-pkg       (committed) ← updated only when user clicks "measure" or presses Enter
-```
-- Discover fetch (`/_discover/*`) is driven by `pkgInput` so chips appear as you type.
-- All data operations (BundleHistory fetch, Waterfall measurement, URL ?pkg= sync) use
-  the committed `pkg` so they never fire on every keystroke.
-- Clicking "measure" / pressing Enter commits `pkgInput → pkg`, then runs measurement.
 
-## 🏷 badge flow
+### Signals
 ```
-URL → parsePath(pathname) → {provider,pkg} | null→redirect /
-→ CF cache check (key=url?cache_v=v3; skip if localhost|?refresh)
-→ fetchPackageSize: HEAD cdn url → content-length | GET→byteLen
-→ generateBadgeSvg(label,sizeStr,isErr) → SVG
-→ Response(svg, Content-Type:image/svg+xml, Cache-Control, ACAO:*)
-→ ctx.waitUntil(cache.put)  [non-blocking]
-```
-Cache TTL: 1yr if version pinned (`/\d/` test on semver segment) else 1h
-
-## 📦 bundle flow
-```
-/_bundle/<pkg>[@ver][/<export>]?cdn=esm.sh&exports
-→ parseBundlePath → {package,version,exportPath}
-→ resolveVersion("latest"→npm registry, cached 1h in D1)
-→ getPackageExports → npm registry pkgjson → parseExports()
-→ per export: D1 cache hit? return. else buildCdnUrl→measureSize→saveSize(ctx.waitUntil)
-→ Response.json({package,version,cdn,exports:[{key,bytes_raw,bytes_transfer}]})
+pkgInput    (draft)     ← updated on every keystroke via onInput
+pkg         (committed) ← updated only when user clicks "check" (handleMeasure)
+cdn                     ← 'jsdelivr' | 'esm.sh' | 'unpkg'
+selectedExport          ← '' (index) or export key string
+measuredInput           ← pkgInput value at last successful measurement (null = never run)
+measuredCdn             ← cdn at last measurement
+measuredExport          ← selectedExport at last measurement
 ```
 
-## 📈 bundle-history flow
+### Derived dirty flags
 ```
-/_bundle-history/<pkg>[/<export>]?cdn=esm.sh
-→ all npm versions (cached 24h) → filter ≤50 (1 per minor, 3-seg semver only, no pre)
-→ per version: D1 hit? use. else CDN fetch → parallel Promise.all
-→ Response.json({package,export,cdn,versions:[{version,publishedAt,bytes_transfer,bytes_raw}]})
+isDirty    = measuredInput===null || pkgInput!==measuredInput || cdn!==measuredCdn || selectedExport!==measuredExport
+inputDirty = pkgInput !== pkg   ← text field changed since last commit; used to disable export dropdown
 ```
+
+### Dirty-state UI behaviour
+- Export dropdown disabled when `inputDirty()` (exports list is stale for a new pkg)
+- Results section, badge section, and BundleHistory section all dim to opacity 0.4 when `isDirty()`
+- Check button shows a subtle periodic glow animation (`checkGlow` keyframe) while `isDirty()`
+- Revert button (↩) appears next to check when `isDirty() && measuredInput !== null`; resets pkgInput/cdn/selectedExport to last measured values
+
+### Discover flow (CORRECTED — was wrong in previous version of this file)
+`/_discover/<pkg>` is called inside `handleMeasure` only — it does NOT fire reactively on every keystroke. Exports are populated only after a successful measurement run.
+
+---
+
+## 📜 BundleHistory — on-demand architecture (refactored)
+
+Old design fetched all version sizes in one shot via `/_bundle-history/*`.
+**Current design** splits into two phases:
+
+1. **Cheap version list** — called reactively when `props.pkg` changes:
+   ```
+   GET /_versions/<pkg>  → { versions: [{version, publishedAt}] }
+   ```
+   Returns version metadata only; no sizes. Fast, cheap.
+
+2. **On-demand size fetch** — user-driven:
+   - Hollow dot click → fetches size for that one version via `/_bundle/<pkg>@<ver>[/<export>]?cdn=jsdelivr`
+   - Clicking a hollow dot also updates the package input to `pkg@version` (making inputs dirty, prompting re-measure)
+   - "generate all" button → fetches all unmeasured versions in parallel (Promise.all)
+
+3. **Chart state**:
+   - `versions` signal: all VersionMeta from step 1
+   - `sizes` signal: Map<version, VersionSize> populated on-demand
+   - Dots are hollow (pointEmpty) when not in sizes map, dashed (pointPending) while fetching, filled (point) when done
+   - Y-axis and area/line paths only render for versions with data
+   - Tooltip shows "click to generate" for hollow dots
+
+### Props
+```typescript
+interface Props {
+  pkg: string;
+  selectedExport: string;
+  onVersionClick?: (version: string) => void;  // called on hollow-dot click; parent pins pkg@version in input
+}
+```
+
+---
 
 ## 🌐 CDN url patterns
-| cdn | root | subpath |
-|-----|------|---------|
-| esm.sh | `esm.sh/<pkg>@<ver>` | `esm.sh/<pkg>@<ver>/<key>` |
-| jsdelivr | `cdn.jsdelivr.net/npm/<pkg>@<ver>/+esm` | `cdn.jsdelivr.net/npm/<pkg>@<ver>/<file>` |
-| unpkg | `unpkg.com/<pkg>@<ver>` | `unpkg.com/<pkg>@<ver>/<file>` |
+| cdn | root (importmap) | subpath |
+|-----|-----------------|---------|
+| esm.sh | `esm.sh/<pkg>@<ver>?bundle` | `esm.sh/<pkg>@<ver>/<key>?bundle` |
+| jsdelivr | `cdn.jsdelivr.net/npm/<pkg>@<ver>/+esm` | `cdn.jsdelivr.net/npm/<pkg>@<ver>/<file>/+esm` |
+| unpkg | `unpkg.com/<pkg>@<ver>?module` | `unpkg.com/<pkg>@<ver>/<key>?module` |
+
+**esm.sh `?bundle` is intentional**: without it, esm.sh resolves transitive deps as separate HTTP requests, inflating the waterfall and measurement. `?bundle` collapses everything into one self-contained file.
+
+Server-side CDN URLs (cdn.ts `buildCdnUrl`) do NOT use `?bundle` — those are used for HEAD size measurement only, not browser import.
+
+---
 
 ## 📐 size measurement strategy
+
+### Server-side (cdn.ts `measureSize`)
 ```
 HEAD → Content-Length present → bytes_transfer (compressed, preferred)
 HEAD → no Content-Length (chunked) → GET → body.byteLength → bytes_raw
-       + check GET Content-Length too → bytes_transfer if present
+       also check GET Content-Length → bytes_transfer if present
 ```
 
-## 🗄 D1 schema (5 tables)
+### Browser-side (measurement.ts `measurePackages`)
+- Injects an importmap + module script into a hidden srcdoc iframe
+- Reads `iframe.contentWindow.performance.getEntriesByType('resource')` after load
+- Annotates primary entry URLs with pkg/version/exportKey
+- Results reported to `/_record` (POST, fire-and-forget) for crowd-sourced P50 data
+- Browser P50 data takes precedence over server HEAD estimates when served from `/_bundle`
+
+---
+
+## 🎨 banner SVG (svg.ts + banner.ts)
+
+### generateBadgeSvg (compact badge)
+Classic two-pill shield. Width auto-sized to text. Height 20px.
+Confidence → pill color: established=green, tentative=yellow, server-estimate=yellow (~prefix), no-data=dark.
+
+### generateStandardBanner (standard banner)
+Two-row design. Width 520px, Height 64px.
+- Row 1 (28px, panel bg): `pkg@version` bold + CDN/ESM/UMD pills on right
+- Row 2 (36px, dark bg): proportional size bar + size string · export count · optional files/trips/duration
+
+`BannerData` interface accepts optional `fileCount`, `roundTrips`, `durationMs` for the waterfall stats row.
+
+### generateFullBanner (full banner)
+Multi-row. Width 520px, Height = 28 + N×22px.
+Header row + one row per export showing key, proportional bar, size.
+
+### banner.ts — real data
+Handler now:
+1. Resolves version via `resolveVersion` (D1 cache 1h, then npm registry)
+2. Fetches export list via `getPackageExports`
+3. Gets size from `getMeasuredSize` (browser P50) → `getCachedSize` (D1) → live `measureSize` (HEAD) in that priority order
+4. Falls back gracefully: partial/null data shows "measuring…" or a placeholder
+5. Returns error banner SVG on exception (never a 5xx, always an SVG)
+
+---
+
+## 🗄 D1 schema
 ```
 cdn_sizes              (package,version,export_key,cdn → bytes_raw,bytes_transfer,fetched_at)
 package_exports        (package,version → exports:JSON, fetched_at)
 package_versions       (package,version,published_at)
 package_versions_fetched (package,fetched_at)
 version_resolution     (package,version,fetched_at)
+resource_timings       (pkg,version,export_key,cdn,bytes_transfer,bytes_raw — browser P50 data)
 ```
 
-## 🔗 URL query params
-| param | scope | description |
-|-------|-------|-------------|
-| `?pkg=` | client | committed package name; stripped if default (`react`) |
-| `?export=` | client | selected export key; updated immediately on chip click |
-| `?cdn=` | server | CDN selection for bundle/history endpoints |
-| `?refresh` | server | bypass CF cache + D1 cache for badge/bundle |
-| `?exports` | server | return all exports instead of single (bundle endpoint) |
+---
 
-Export chip clicks update `?export=` immediately via `history.replaceState` (no debounce).
-`?pkg=` syncs from the committed `pkg` signal with a 400 ms debounce.
+## 🔍 discover.ts — export resolution
 
-## 🔄 stale-data prevention
-- Measurement results (Waterfall + OutputTabs) are cleared whenever `selectedExport`
-  changes (chip click) or the committed `pkg` changes (new measure button press).
-- BundleHistory re-fetches automatically when either `pkg` or `selectedExport` changes.
-- Discover chips update from the live draft input (`pkgInput`) so they stay fresh.
+Parses `@scope/name@version` and `name@version` correctly.
+
+Resolution order:
+1. Fetch `https://registry.npmjs.org/<pkg>/<version>` (version can be tag like `latest`)
+2. If `pkgJson.exports` present → `parseExports()` in cdn.ts
+3. If NO `exports` field → scan tarball via jsDelivr flat API (`fetchPackageFiles`)
+   - Filters to `.js|.mjs|.cjs` files
+   - Deduplicates by stem, preferring `.mjs > .js > .cjs`
+   - Returns all files as export list
+
+Response: `{ package, version, exports: [{key, path}], wildcardResolved: boolean }`
+
+---
+
+## 🎛 OutputTabs — UMD detection (fetchUmdInfo)
+
+Uses jsDelivr flat API: `https://data.jsdelivr.com/v1/package/npm/<pkg>@<ver>/flat`
+**Do NOT encode** the pkg@version with encodeURIComponent — jsDelivr expects raw `@scope/name@version`.
+
+UMD candidate priority:
+1. `umd/*.production.min.js` (non-ESM)
+2. `umd/*.min.js` (non-ESM)
+3. `*.umd.prod.min.js`
+4. `*.umd.min.js`
+5. `*.umd.js`
+6. `umd/*.js` (non-ESM)
+7. `dist/*.global.prod.js`
+8. `dist/*.production.min.js`
+9. `dist/*.min.js`
+10. root-level `*.min.js`
+
+Non-ESM filter: exclude files matching `/\.(mjs|esm\.js|module\.js)$/`
+
+---
+
+## 📊 Waterfall component
+
+Groups `ResourceTimingEntry[]` into rounds: resources whose `startTime` is within 5ms of the previous are in the same round; a gap > 5ms opens a new round.
+
+Displays: total files · wire size (transferSize) · decoded size (decodedBodySize) · round count · total duration.
+
+---
+
+## 🎨 CSS vars (:root)
+```
+--color-{bg|grid|text|text-muted|accent|border|border-light}
+--spacing-{page-padding|main-block|section-*|hero-*|heading-*|input-*|button-*|row-gap|label-bottom|select-pr|hairline}
+--font-size-{heading|tagline|code|label|input|button|providers|base|sm} + -mobile variants
+prefers-color-scheme:dark overrides all --color-*
+```
+
+### Key CSS module classes
+**App.module.css**: `pkgInputWrap` `inputRow` `inputGroup` `cdnGroup` `exportGroup` `pkgInput` `cdnSelect` `exportSelect` `runBtn` `runBtnDirty` (glow anim) `revertBtn` `resultsDimmed` (opacity 0.4, pointer-events none) `results` `error` `spinnerWrap` `spinner`
+
+**BundleHistory.module.css**: `bundleHistory` `chartWrap` `chart` `gridLine` `line` `area` `point` `pointEmpty` `pointPending` `axisLabel` `crosshair` `tooltipGroup` `tooltipBox` `tooltipVersion` `tooltipBytes` `loading` `error` `statItem` `chartFooter` `generateBtn`
+
+**BadgeGenerator.module.css**: `badgeGenerator` `separator` (hr rule) `headingRow` (flex, space-between) `inputLabel` `previewRow` `badgeImg` `bannerImg` `copyButton`
+
+---
 
 ## 🏗 build
 ```
@@ -155,20 +284,13 @@ bun run build-client.ts
 wrangler deploy  ← bundles src/index.ts + public/** → CF Workers
 ```
 
-## 🔌 CF bindings
-```
-env.ASSETS : Fetcher   — static assets · auto MIME · ETags · range
-env.DB     : D1Database — SQLite via Cloudflare D1
-```
-
-## 🎨 CSS vars (:root)
-`--color-{bg|grid|text|text-muted|accent|border|border-light}`
-`--spacing-{page-padding|main-block|section-*|hero-*|heading-*|input-*|button-*}`
-`--font-size-{heading|tagline|code|label|input|button|providers}` + `-mobile` variants
-`prefers-color-scheme:dark` overrides all `--color-*`
+---
 
 ## 🧪 test
 `bun test` · vitest + @cloudflare/vitest-pool-workers · test/index.spec.ts
+Test suite is placeholder (tests /message, /random) — does NOT test actual handlers.
+
+---
 
 ## cmds
 ```sh
@@ -177,24 +299,34 @@ bun run build:client # build-client.ts only
 bun run deploy       # build:client → wrangler deploy
 bun test
 bun run cf-typegen   # wrangler types → worker-configuration.d.ts
+npx tsc --noEmit     # type-check (ignore "Cannot find type definition file for 'bun'" — pre-existing)
 ```
+
+---
 
 ## ∇ invariants
 - `/_/` reserved namespace; npm package names never start with `_`
-- `/_/` (static assets) checked before API routes in worker router
+- Static assets `/_/` checked before API routes
 - Cache key: strip `?refresh`, append `?cache_v=v3`
 - localhost → skip CF cache entirely
 - All cache writes & telemetry → `ctx.waitUntil` (non-blocking, best-effort)
 - Export key normalisation: `.`→`index`; `./foo`→`foo`
-- Wildcard exports: client crawls unpkg `/?meta` for file discovery
-- Semver filter: 3-segment only, no prerelease; max ~50 versions (1 per minor)
-- `bytes_transfer` (compressed HEAD Content-Length) preferred over `bytes_raw` (GET body)
+- Wildcard exports: file list from jsDelivr flat API (`fetchPackageFiles` in wildcard.ts)
+- Semver filter (version list): 3-segment only, no prerelease; max ~50 versions (1 per minor)
+- `bytes_transfer` (compressed Content-Length) preferred over `bytes_raw` (GET body length)
 - badge CDN = providers.ts (root pkg only); bundle CDN = cdn.ts (export-aware)
-- `pkg` signal is committed only on explicit user action (button / Enter); never on keystroke
+- `pkg` signal committed only on explicit user action; never on keystroke
+- `/_discover` only called inside `handleMeasure`, never reactively from the input field
+- esm.sh importmap URLs always use `?bundle` to prevent separate dep requests in the browser
+
+---
 
 ## ⚠ known gaps / gotchas
-- badge endpoint measures **root CDN response** (not bundled/treeshaken) — good for CDN cost, not bundle impact
-- Skypack (cdn.skypack.dev) listed in providers but NOT in CDNS (cdn.ts) — badge only, no bundle analysis
-- No gzip/brotli simulation: bytes_transfer = what CDN serves, not what bundler would emit
-- D1 stores indefinitely for pinned versions; no eviction / cleanup mechanism
-- test suite is placeholder (tests /message, /random) — not testing actual handlers
+- badge endpoint measures **root CDN response** (not bundled/treeshaken)
+- Skypack listed in providers.ts but NOT in CDNS (cdn.ts) — badge only, no bundle analysis
+- No gzip/brotli simulation: bytes_transfer = what CDN serves, not what a bundler would emit
+- D1 stores indefinitely for pinned versions; no eviction/cleanup mechanism
+- `LoadingOverlay.tsx` still exists as a file but is unused — App.tsx no longer imports it
+- `bundle-history.ts` handler still exists but the UI no longer calls `/_bundle-history/*`; it uses `/_versions/` + per-version `/_bundle/` instead
+- `tsc --noEmit` always emits one pre-existing error: "Cannot find type definition file for 'bun'" — ignore it; it does not block builds
+- `?export=` URL param is no longer synced immediately on chip click (chips were removed); export is now a `<select>` driven by discover data
