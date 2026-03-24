@@ -51,20 +51,20 @@
 }
 
 .badgeCell {
-	padding: 0.35rem 0.5rem 0.35rem 0;
+	padding: var(--spacing-cell-row-block) var(--spacing-cell-row-inline) var(--spacing-cell-row-block) 0;
 	white-space: nowrap;
 	vertical-align: middle;
 }
 
 .badgeImg {
 	display: inline-block !important;
-	height: 20px !important;
+	height: var(--badge-img-height) !important;
 	width: auto !important;
 	max-width: none !important;
 }
 
 .urlCell {
-	padding: 0.35rem 0.5rem;
+	padding: var(--spacing-cell-row-block) var(--spacing-cell-row-inline);
 	vertical-align: middle;
 	width: 100%;
 }
@@ -77,19 +77,18 @@
 }
 
 .copyCell {
-	padding: 0.35rem 0 0.35rem 0.5rem;
+	padding: var(--spacing-cell-row-block) 0 var(--spacing-cell-row-block) var(--spacing-cell-row-inline);
 	vertical-align: middle;
 	white-space: nowrap;
 }
 
 .copyBtn {
-	padding: 0.25rem 0.6rem;
+	padding: var(--spacing-copy-btn-block) var(--spacing-copy-btn-inline);
 	font-family: 'Cascadia Code', monospace;
 	font-size: var(--font-size-button);
 	color: var(--color-text);
 	background: var(--color-bg);
 	border: 1px solid var(--color-border);
-	border-radius: 3px;
 	cursor: pointer;
 	transition: all 0.2s;
 

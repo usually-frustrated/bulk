@@ -2,7 +2,8 @@ import type { Env } from '../types';
 import { parseBundlePath } from '../utils/bundle-parse';
 import { CDNS, DEFAULT_CDN, buildCdnUrl, measureSize } from '../utils/cdn';
 import type { CDN } from '../utils/cdn';
-import { resolveVersion, getPackageExports, getCachedSize, saveSize } from '../utils/db';
+import { resolveVersion, getPackageExports, getCachedSize, saveSize, getMeasuredSize } from '../utils/db';
+import { expandWildcardExports } from '../utils/wildcard';
 
 // ─── single export ───────────────────────────────────────────────────────────
 
@@ -14,10 +15,25 @@ async function handleSingleExport(
 	version: string,
 	exportKey: string,
 	cdn: CDN,
+	refresh: boolean = false,
 ): Promise<Response> {
-	const cached = await getCachedSize(pkg, version, exportKey, cdn, env);
-	if (cached) {
-		return Response.json({ package: pkg, version, export: exportKey, cdn, ...cached });
+	// Prefer real browser P50 measurements over cached HEAD estimates.
+	// Wrapped in try/catch so a missing resource_timings table falls through gracefully.
+	try {
+		const browserSize = await getMeasuredSize(pkg, version, exportKey, cdn, env);
+		if (browserSize) {
+			return Response.json({ package: pkg, version, export: exportKey, cdn, ...browserSize });
+		}
+	} catch {}
+
+	if (!refresh) {
+		const cached = await getCachedSize(pkg, version, exportKey, cdn, env);
+		if (cached) {
+			return Response.json({
+				package: pkg, version, export: exportKey, cdn,
+				...cached, confidence: 'server-estimate',
+			});
+		}
 	}
 
 	const exports = await getPackageExports(pkg, version, env);
@@ -28,10 +44,12 @@ async function handleSingleExport(
 
 	const url = buildCdnUrl(pkg, version, exportKey, entry.path, cdn);
 	const size = await measureSize(url);
-
 	ctx.waitUntil(saveSize(pkg, version, exportKey, cdn, size, env));
 
-	return Response.json({ package: pkg, version, export: exportKey, cdn, ...size });
+	return Response.json({
+		package: pkg, version, export: exportKey, cdn,
+		...size, confidence: 'server-estimate',
+	});
 }
 
 // ─── all exports (?exports) ──────────────────────────────────────────────────
@@ -43,21 +61,34 @@ async function handleAllExports(
 	pkg: string,
 	version: string,
 	cdn: CDN,
+	refresh: boolean = false,
 ): Promise<Response> {
-	const exports = await getPackageExports(pkg, version, env);
+	const rawExports = await getPackageExports(pkg, version, env);
+	// Expand wildcard export keys (e.g. "*" → individual files) before measuring.
+	const exports = await expandWildcardExports(rawExports, pkg, version);
 
 	const results = await Promise.all(
 		exports.map(async (entry) => {
-			const cached = await getCachedSize(pkg, version, entry.key, cdn, env);
-			if (cached) return { key: entry.key, ...cached };
-
-			const url = buildCdnUrl(pkg, version, entry.key, entry.path, cdn);
 			try {
+				// Prefer real browser P50 measurements over HEAD estimates.
+				// Wrapped in try/catch so a missing resource_timings table falls through.
+				let browserSize = null;
+				try {
+					browserSize = await getMeasuredSize(pkg, version, entry.key, cdn, env);
+				} catch {}
+				if (browserSize) return { key: entry.key, ...browserSize };
+
+				if (!refresh) {
+					const cached = await getCachedSize(pkg, version, entry.key, cdn, env);
+					if (cached) return { key: entry.key, ...cached, confidence: 'server-estimate' };
+				}
+
+				const url = buildCdnUrl(pkg, version, entry.key, entry.path, cdn);
 				const size = await measureSize(url);
 				ctx.waitUntil(saveSize(pkg, version, entry.key, cdn, size, env));
-				return { key: entry.key, ...size };
+				return { key: entry.key, ...size, confidence: 'server-estimate' };
 			} catch {
-				return { key: entry.key, bytes_raw: null, bytes_transfer: null };
+				return { key: entry.key, bytes_raw: null, bytes_transfer: null, confidence: 'no-data' };
 			}
 		}),
 	);
@@ -100,14 +131,15 @@ export async function handleBundleRequest(
 
 	const pkg = parsed.package;
 	const wantsAllExports = url.searchParams.has('exports');
+	const refresh = url.searchParams.has('refresh');
 
 	try {
 		if (wantsAllExports) {
-			return await handleAllExports(request, env, ctx, pkg, version, cdnParam);
+			return await handleAllExports(request, env, ctx, pkg, version, cdnParam, refresh);
 		}
 
 		const exportKey = parsed.exportPath ?? 'index';
-		return await handleSingleExport(request, env, ctx, pkg, version, exportKey, cdnParam);
+		return await handleSingleExport(request, env, ctx, pkg, version, exportKey, cdnParam, refresh);
 	} catch (err: unknown) {
 		const status = (err as { status?: number }).status ?? 502;
 		return new Response(err instanceof Error ? err.message : 'CDN fetch failed', { status });

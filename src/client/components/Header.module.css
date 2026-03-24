@@ -7,7 +7,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 0.35em;
+	gap: var(--spacing-logo-gap);
 }
 
 .logo {
@@ -15,7 +15,6 @@
 	width: 1em;
 	height: 1em;
 	vertical-align: middle;
-	border-radius: 0.18em;
 }
 
 .tagline {

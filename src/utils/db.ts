@@ -1,6 +1,7 @@
 import type { Env } from '../types';
-import type { ExportEntry, SizeResult, CDN } from './cdn';
+import type { ExportEntry, SizeResult, MeasuredSize, CDN } from './cdn';
 import { parseExports } from './cdn';
+import type { ResourceTiming } from '../handlers/measurement';
 
 // ─── version resolution (@latest → semver) ───────────────────────────────────
 
@@ -117,6 +118,99 @@ export async function saveSize(
 	)
 		.bind(pkg, version, exportKey, cdn, size.bytes_raw, size.bytes_transfer)
 		.run();
+}
+
+// ─── resource timings (browser measurements) ────────────────────────────────
+
+/**
+ * Store annotated resource timing entries from a browser measurement session.
+ * Skips rows with transferSize = 0 (cached) or null.
+ */
+export async function saveResourceTimings(
+	resources: ResourceTiming[],
+	cdn: string,
+	browser: string,
+	connection: string,
+	env: Env,
+): Promise<void> {
+	const stmts = resources.map((r) =>
+		env.DB.prepare(
+			`INSERT INTO resource_timings
+			 (package, version, export_key, cdn, browser, connection,
+			  transfer_size, decoded_body_size, start_time, response_end, url)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		).bind(
+			r.pkg,
+			r.version,
+			r.exportKey,
+			cdn,
+			browser,
+			connection,
+			r.transferSize,
+			r.decodedBodySize,
+			r.startTime,
+			r.responseEnd,
+			r.url,
+		),
+	);
+	if (stmts.length) await env.DB.batch(stmts);
+}
+
+/**
+ * Return the P50 transfer/decoded sizes from recent browser measurements,
+ * together with a confidence tier based on independent sample count (Decision 2):
+ *   0–9  → null (unverified; caller falls back to server-estimate)
+ *   10–39 → MeasuredSize with confidence='tentative'
+ *   40+   → MeasuredSize with confidence='established'
+ */
+export async function getMeasuredSize(
+	pkg: string,
+	version: string,
+	exportKey: string,
+	cdn: CDN,
+	env: Env,
+): Promise<MeasuredSize | null> {
+	// Count first so we can short-circuit before the heavier median query.
+	const count = await env.DB.prepare(
+		`SELECT COUNT(*) AS n FROM resource_timings
+		 WHERE package = ? AND version = ? AND export_key = ? AND cdn = ?
+		   AND timestamp > datetime('now', '-30 days')
+		   AND transfer_size > 0`,
+	)
+		.bind(pkg, version, exportKey, cdn)
+		.first<{ n: number }>();
+
+	const n = count?.n ?? 0;
+	if (n < 10) return null; // unverified — too few samples for the badge/API
+
+	// SQLite median: pick the middle row after ordering by transfer_size.
+	const row = await env.DB.prepare(
+		`SELECT transfer_size AS bytes_transfer, decoded_body_size AS bytes_raw
+		 FROM resource_timings
+		 WHERE package = ? AND version = ? AND export_key = ? AND cdn = ?
+		   AND timestamp > datetime('now', '-30 days')
+		   AND transfer_size > 0
+		 ORDER BY transfer_size
+		 LIMIT 1
+		 OFFSET (
+		   SELECT (COUNT(*) - 1) / 2
+		   FROM resource_timings
+		   WHERE package = ? AND version = ? AND export_key = ? AND cdn = ?
+		     AND timestamp > datetime('now', '-30 days')
+		     AND transfer_size > 0
+		 )`,
+	)
+		.bind(pkg, version, exportKey, cdn, pkg, version, exportKey, cdn)
+		.first<{ bytes_transfer: number | null; bytes_raw: number | null }>();
+
+	if (!row) return null;
+
+	return {
+		bytes_transfer: row.bytes_transfer,
+		bytes_raw: row.bytes_raw,
+		confidence: n >= 40 ? 'established' : 'tentative',
+		sampleCount: n,
+	};
 }
 
 // ─── version history list ────────────────────────────────────────────────────

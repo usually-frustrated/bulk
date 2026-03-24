@@ -1,12 +1,12 @@
 .pkgInputWrap {
 	padding: var(--spacing-section-block);
-	text-align: left;
 	margin-bottom: var(--spacing-section-gap);
+	overflow: hidden;
 }
 
 .inputRow {
 	display: flex;
-	gap: 0.75rem;
+	gap: var(--spacing-row-gap);
 	align-items: flex-end;
 }
 
@@ -28,42 +28,151 @@
 
 .pkgInput {
 	width: 100%;
-	padding: var(--spacing-input-block) var(--spacing-input-inline);
+	padding: var(--spacing-input-block) 0;
 	font-family: 'Cascadia Code', monospace;
 	font-size: var(--font-size-input);
 	color: var(--color-text);
-	background: var(--color-bg);
-	border: 1px solid var(--color-border);
-	border-radius: 4px;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--color-border);
 	outline: none;
 	transition: border-color 0.2s;
 	box-sizing: border-box;
 
 	&:focus {
-		border-color: var(--color-accent);
+		border-bottom-color: var(--color-accent);
 	}
 }
 
 .cdnSelect {
-	padding: var(--spacing-input-block) var(--spacing-input-inline);
+	padding: var(--spacing-input-block) 0;
+	padding-right: var(--spacing-select-pr);
 	font-family: 'Cascadia Code', monospace;
 	font-size: var(--font-size-input);
 	color: var(--color-text);
-	background: var(--color-bg);
-	border: 1px solid var(--color-border);
-	border-radius: 4px;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--color-border);
 	outline: none;
 	cursor: pointer;
 	transition: border-color 0.2s;
 	appearance: none;
-	padding-right: 1.8rem;
 	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
 	background-repeat: no-repeat;
-	background-position: right 0.55rem center;
+	background-position: right var(--spacing-hairline) center;
 
 	&:focus {
+		border-bottom-color: var(--color-accent);
+	}
+}
+
+.pkgTextarea {
+	width: 100%;
+	padding: var(--spacing-input-block) 0;
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-input);
+	color: var(--color-text);
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--color-border);
+	outline: none;
+	resize: vertical;
+	transition: border-color 0.2s;
+	box-sizing: border-box;
+	line-height: 1.6;
+
+	&:focus {
+		border-bottom-color: var(--color-accent);
+	}
+}
+
+.cdnGroup {
+	flex: 0 0 auto;
+}
+
+.measureBtn {
+	margin-top: 0.5rem;
+	padding: var(--spacing-button-block) var(--spacing-button-inline);
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-button);
+	color: var(--color-bg);
+	background: var(--color-accent);
+	border: none;
+	border-radius: 2px;
+	cursor: pointer;
+	transition: opacity 0.15s;
+
+	&:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+
+	&:hover:not(:disabled) {
+		opacity: 0.85;
+	}
+}
+
+.suggestions {
+	margin-top: 0.4rem;
+	max-width: 100%;
+	overflow: hidden;
+}
+
+.suggestLabel {
+	font-size: var(--font-size-xs);
+	color: var(--color-text-muted);
+	display: block;
+	margin-bottom: 0.2rem;
+}
+
+.suggestChips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+}
+
+.chip {
+	background: none;
+	border: 1px solid var(--color-border);
+	border-radius: 2px;
+	padding: 0.05rem 0.35rem;
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-xs);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition: color 0.15s, border-color 0.15s, background 0.15s;
+
+	&:hover {
+		color: var(--color-accent);
 		border-color: var(--color-accent);
 	}
+}
+
+.chipActive {
+	color: var(--color-accent);
+	border-color: var(--color-accent);
+	background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.error {
+	color: #c0392b;
+	padding: var(--spacing-note-block) 0;
+	margin: var(--spacing-note-block) 0;
+	font-size: var(--font-size-sm);
+	border-bottom: 1px solid currentColor;
+}
+
+.results {
+	margin: var(--spacing-section-block);
+	border-top: 1px solid var(--color-border);
+	padding-top: 0.5rem;
+}
+
+.note {
+	margin: var(--spacing-note-margin) 0;
+	padding: var(--spacing-note-block) 0;
+	border-left: 2px solid var(--color-accent);
+	padding-left: var(--spacing-note-left);
 }
 
 @media (max-width: 480px) {
@@ -78,6 +187,6 @@
 	}
 
 	.cdnSelect {
-		padding-right: 1.6rem;
+		padding-right: var(--spacing-select-pr-mobile);
 	}
 }

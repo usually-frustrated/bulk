@@ -2,6 +2,9 @@ export const CDNS = ['esm.sh', 'jsdelivr', 'unpkg'] as const;
 export type CDN = (typeof CDNS)[number];
 export const DEFAULT_CDN: CDN = 'esm.sh';
 
+/** Data confidence tier per Decision 2 / Decision 7. */
+export type Confidence = 'established' | 'tentative' | 'server-estimate' | 'no-data';
+
 export interface ExportEntry {
 	/** Normalised key used throughout the app: 'index', 'jsx-runtime', etc. */
 	key: string;
@@ -14,6 +17,12 @@ export interface SizeResult {
 	bytes_raw: number | null;
 	/** Content-Length from HEAD (compressed transfer size). Preferred when available. */
 	bytes_transfer: number | null;
+}
+
+/** SizeResult enriched with crowd-sourced confidence metadata. */
+export interface MeasuredSize extends SizeResult {
+	confidence: Confidence;
+	sampleCount: number;
 }
 
 // ─── URL construction ────────────────────────────────────────────────────────

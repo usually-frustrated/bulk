@@ -1,49 +1,43 @@
-import { createSignal } from 'solid-js';
+import { createSignal, createEffect } from 'solid-js';
 import styles from './BadgeGenerator.module.css';
 
-export function BadgeGenerator() {
+interface Props {
+	/** Reactive accessor for the current package name. */
+	pkg: () => string;
+}
+
+export function BadgeGenerator(props: Props) {
 	const domain = window.location.origin;
-	const [packageName, setPackageName] = createSignal('zustand');
-	const [copyText, setCopyText] = createSignal('copy badge URL');
+	const [copyUrlText, setCopyUrlText] = createSignal('copy url');
+	const [copyMdText, setCopyMdText] = createSignal('copy markdown');
 
-	const badgeUrl = () => `${domain}/${packageName() || 'zustand'}`;
+	const badgeUrl = () => `${domain}/${props.pkg() || 'zustand'}`;
+	const markdownEmbed = () => `[![${props.pkg() || 'zustand'} size](${badgeUrl()})](${domain}/?pkg=${encodeURIComponent(props.pkg() || 'zustand')})`;
 
-	const handleInput = (e: InputEvent & { currentTarget: HTMLInputElement }) => {
-		setPackageName(e.currentTarget.value.trim());
-	};
-
-	const handleCopy = async () => {
-		const url = badgeUrl();
+	const withFlash = (setter: (s: string) => void, label: string, done: string) => async (text: string) => {
 		try {
-			await navigator.clipboard.writeText(url);
-			setCopyText('copied!');
-			setTimeout(() => {
-				setCopyText('copy badge URL');
-			}, 2000);
-		} catch (err) {
-			console.error('Failed to copy:', err);
-		}
+			await navigator.clipboard.writeText(text);
+			setter(done);
+			setTimeout(() => setter(label), 2000);
+		} catch {}
 	};
+
+	const copyUrl = withFlash(setCopyUrlText, 'copy url', 'copied!');
+	const copyMd  = withFlash(setCopyMdText,  'copy markdown', 'copied!');
 
 	return (
 		<section class={styles.badgeGenerator}>
-			<label for="package-input" class={styles.inputLabel}>
-				Package name
-			</label>
-			<div class={styles.inputWithButton}>
-				{/*<span class={styles.inputPrefix}>{domain}/</span>*/}
-				<input type="text" id="package-input" value={packageName()} onInput={handleInput} placeholder="e.g., react, zustand" />
-				<button class={styles.copyButton} onClick={handleCopy}>
-					{copyText()}
-				</button>
-			</div>
-			<div class={styles.livePreview}>
-				<div class={styles.badgeUrl}>
-					<code>
-						<pre>{badgeUrl()}</pre>
-					</code>
+			<label class={styles.inputLabel}>badge</label>
+			<div class={styles.previewRow}>
+				<img src={badgeUrl()} alt={`${props.pkg()} size badge`} class={styles.badgeImg} />
+				<div class={styles.actions}>
+					<button class={styles.copyButton} onClick={() => copyUrl(badgeUrl())}>
+						{copyUrlText()}
+					</button>
+					<button class={styles.copyButton} onClick={() => copyMd(markdownEmbed())}>
+						{copyMdText()}
+					</button>
 				</div>
-				<img src={badgeUrl()} alt="jsdelivr size" />
 			</div>
 		</section>
 	);

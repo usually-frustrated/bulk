@@ -3,10 +3,14 @@ import { generateBadgeSvg } from '../utils/svg';
 import { buildCacheControl, parsePath, type ParsedPath } from '../utils/pkg';
 import { getProvider, getDefaultProvider, type Provider } from '../providers';
 import { Telemetry } from '../utils/telemetry';
+import { resolveVersion, getMeasuredSize } from '../utils/db';
+import { DEFAULT_CDN } from '../utils/cdn';
+import type { Confidence } from '../utils/cdn';
+import type { Env } from '../types';
 
 interface FetchResult {
 	sizeStr: string;
-	isError: boolean;
+	confidence: Confidence;
 }
 
 async function fetchPackageSize(provider: Provider, pkg: string): Promise<FetchResult> {
@@ -40,7 +44,7 @@ async function fetchPackageSize(provider: Provider, pkg: string): Promise<FetchR
 				errorBody: errorText,
 				duration,
 			});
-			return { sizeStr: 'not found', isError: true };
+			return { sizeStr: 'not found', confidence: 'no-data' };
 		}
 
 		const contentLength = res.headers.get('content-length');
@@ -62,7 +66,7 @@ async function fetchPackageSize(provider: Provider, pkg: string): Promise<FetchR
 			hasContentLength: !!contentLength,
 			duration,
 		});
-		return { sizeStr: formatSize(bytes), isError: false };
+		return { sizeStr: formatSize(bytes), confidence: 'server-estimate' };
 	} catch (error) {
 		Telemetry.error('Failed to fetch package size', {
 			provider: provider.id,
@@ -70,14 +74,14 @@ async function fetchPackageSize(provider: Provider, pkg: string): Promise<FetchR
 			error: error instanceof Error ? error.message : String(error),
 			errorStack: error instanceof Error ? error.stack : undefined,
 		});
-		return { sizeStr: 'error', isError: true };
+		return { sizeStr: 'error', confidence: 'no-data' };
 	}
 }
 
 // Cache version - increment this to invalidate all caches on deployment
 const CACHE_VERSION = 'v3';
 
-export async function handleBadgeRequest(request: Request, ctx: ExecutionContext): Promise<Response> {
+export async function handleBadgeRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 	const requestStartTime = Date.now();
 	const url = new URL(request.url);
 	const parsed = parsePath(url.pathname);
@@ -139,8 +143,32 @@ export async function handleBadgeRequest(request: Request, ctx: ExecutionContext
 		);
 	}
 
-	const { sizeStr, isError } = await fetchPackageSize(provider, pkg);
-	const svg = generateBadgeSvg(`${provider.name} size`, sizeStr, isError);
+	// ── try browser-measured P50 first (Decision 4 priority order) ──────────
+	let sizeStr: string;
+	let confidence: Confidence;
+
+	// Extract bare package name (strip @version suffix if present, being careful
+	// with scoped packages like @scope/pkg where the @ is at position 0).
+	const atIdx = pkg.lastIndexOf('@');
+	const pkgName = atIdx > 0 ? pkg.slice(0, atIdx) : pkg;
+	const pkgVersion = atIdx > 0 ? pkg.slice(atIdx + 1) : null;
+
+	try {
+		const version = pkgVersion ?? await resolveVersion(pkgName, env);
+		const measured = await getMeasuredSize(pkgName, version, 'index', DEFAULT_CDN, env);
+		if (measured) {
+			sizeStr = formatSize(measured.bytes_transfer ?? measured.bytes_raw ?? 0);
+			confidence = measured.confidence;
+		} else {
+			// Not enough browser samples — fall back to HEAD estimate.
+			({ sizeStr, confidence } = await fetchPackageSize(provider, pkg));
+		}
+	} catch {
+		// Version resolution or db failure — fall back gracefully.
+		({ sizeStr, confidence } = await fetchPackageSize(provider, pkg));
+	}
+
+	const svg = generateBadgeSvg(`${provider.name} size`, sizeStr, confidence);
 
 	const response = new Response(svg, {
 		headers: {
@@ -161,7 +189,7 @@ export async function handleBadgeRequest(request: Request, ctx: ExecutionContext
 			provider: providerId,
 			package: pkg,
 			cacheHit,
-			isError,
+			confidence,
 			sizeStr,
 			duration: totalDuration,
 		}),

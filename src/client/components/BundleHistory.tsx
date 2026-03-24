@@ -1,4 +1,4 @@
-import { batch, createEffect, createSignal, For, onMount, Show } from 'solid-js';
+import { batch, createEffect, createSignal, For, Show } from 'solid-js';
 import styles from './BundleHistory.module.css';
 
 interface VersionData {
@@ -49,12 +49,13 @@ function toY(bytes: number, maxBytes: number): number {
 
 interface Props {
 	pkg: string;
-	cdn: string;
 	onLoading: (v: boolean) => void;
+	selectedExport: string;
+	onExportChange: (k: string) => void;
+	exports: { key: string; path: string }[] | null;
 }
 
 export function BundleHistory(props: Props) {
-	const [exportInput, setExportInput] = createSignal('');
 	const [data, setData] = createSignal<HistoryData | null>(null);
 	const [loading, setLoading] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
@@ -63,7 +64,17 @@ export function BundleHistory(props: Props) {
 	async function analyze() {
 		const pkg = props.pkg.trim();
 		if (!pkg) return;
-		const exp = exportInput().trim() || 'index';
+		const exp = props.selectedExport.trim() || 'index';
+
+		// Sync export to URL
+		const params = new URLSearchParams(window.location.search);
+		if (exp && exp !== 'index') {
+			params.set('export', exp);
+		} else {
+			params.delete('export');
+		}
+		const qs = params.toString();
+		history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
 
 		batch(() => {
 			setLoading(true);
@@ -74,9 +85,7 @@ export function BundleHistory(props: Props) {
 		props.onLoading(true);
 
 		try {
-			// Map provider ID (badge system) to bundle CDN ID (bundle system)
-		const bundleCdn = props.cdn === 'esmsh' ? 'esm.sh' : props.cdn;
-		const res = await fetch(`/_bundle-history/${pkg}/${exp}?cdn=${bundleCdn}`);
+			const res = await fetch(`/_bundle-history/${pkg}/${exp}?cdn=jsdelivr`);
 			if (!res.ok) throw new Error(await res.text());
 			setData((await res.json()) as HistoryData);
 		} catch (err) {
@@ -87,17 +96,12 @@ export function BundleHistory(props: Props) {
 		}
 	}
 
-	// Auto-load on mount
-	onMount(() => analyze());
-
-	// Reset when pkg changes
+	// Re-analyze whenever pkg or selected export changes.
 	createEffect(() => {
-		const _ = props.pkg;
-		batch(() => {
-			setData(null);
-			setError(null);
-			setHoveredIdx(null);
-		});
+		const pkg = props.pkg; // tracked
+		const exp = props.selectedExport; // tracked
+		void exp;
+		if (pkg.trim()) void analyze();
 	});
 
 	// ─── chart derivations ──────────────────────────────────────────────────
@@ -160,17 +164,7 @@ export function BundleHistory(props: Props) {
 
 	return (
 		<section class={styles.bundleHistory}>
-			<label class={styles.sectionLabel}>Bundle size history</label>
-
 			<div class={styles.inputRow}>
-				<input
-					type="text"
-					class={styles.inputExport}
-					placeholder="export (default: index)"
-					value={exportInput()}
-					onInput={(e) => setExportInput(e.currentTarget.value)}
-					onKeyDown={(e) => e.key === 'Enter' && analyze()}
-				/>
 				<button class={styles.analyzeBtn} onClick={analyze} disabled={loading()}>
 					{loading() ? '…' : 'analyze'}
 				</button>
@@ -178,6 +172,10 @@ export function BundleHistory(props: Props) {
 
 			<Show when={error()}>
 				<p class={styles.error}>{error()}</p>
+			</Show>
+
+			<Show when={loading()}>
+				<div class={styles.loading}>Loading version history...</div>
 			</Show>
 
 			<Show when={data()}>
@@ -288,6 +286,7 @@ export function BundleHistory(props: Props) {
 					</div>
 				</div>
 			</Show>
+
 		</section>
 	);
 }
