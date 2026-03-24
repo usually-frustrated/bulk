@@ -3,6 +3,7 @@ import { parseBundlePath } from '../utils/bundle-parse';
 import { CDNS, DEFAULT_CDN, buildCdnUrl, measureSize } from '../utils/cdn';
 import type { CDN } from '../utils/cdn';
 import { resolveVersion, getPackageExports, getCachedSize, saveSize, getMeasuredSize } from '../utils/db';
+import { expandWildcardExports } from '../utils/wildcard';
 
 // ─── single export ───────────────────────────────────────────────────────────
 
@@ -17,10 +18,13 @@ async function handleSingleExport(
 	refresh: boolean = false,
 ): Promise<Response> {
 	// Prefer real browser P50 measurements over cached HEAD estimates.
-	const browserSize = await getMeasuredSize(pkg, version, exportKey, cdn, env);
-	if (browserSize) {
-		return Response.json({ package: pkg, version, export: exportKey, cdn, ...browserSize });
-	}
+	// Wrapped in try/catch so a missing resource_timings table falls through gracefully.
+	try {
+		const browserSize = await getMeasuredSize(pkg, version, exportKey, cdn, env);
+		if (browserSize) {
+			return Response.json({ package: pkg, version, export: exportKey, cdn, ...browserSize });
+		}
+	} catch {}
 
 	if (!refresh) {
 		const cached = await getCachedSize(pkg, version, exportKey, cdn, env);
@@ -59,13 +63,19 @@ async function handleAllExports(
 	cdn: CDN,
 	refresh: boolean = false,
 ): Promise<Response> {
-	const exports = await getPackageExports(pkg, version, env);
+	const rawExports = await getPackageExports(pkg, version, env);
+	// Expand wildcard export keys (e.g. "*" → individual files) before measuring.
+	const exports = await expandWildcardExports(rawExports, pkg, version);
 
 	const results = await Promise.all(
 		exports.map(async (entry) => {
 			try {
 				// Prefer real browser P50 measurements over HEAD estimates.
-				const browserSize = await getMeasuredSize(pkg, version, entry.key, cdn, env);
+				// Wrapped in try/catch so a missing resource_timings table falls through.
+				let browserSize = null;
+				try {
+					browserSize = await getMeasuredSize(pkg, version, entry.key, cdn, env);
+				} catch {}
 				if (browserSize) return { key: entry.key, ...browserSize };
 
 				if (!refresh) {

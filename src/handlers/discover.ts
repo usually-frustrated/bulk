@@ -1,65 +1,6 @@
 import type { Env } from '../types';
 import { parseExports } from '../utils/cdn';
-
-// ─── file listing ────────────────────────────────────────────────────────────
-
-/**
- * Fetch flat file list from jsDelivr.
- * Returns paths like "dist/index.mjs" (no leading slash).
- */
-async function fetchPackageFiles(pkg: string, version: string): Promise<string[]> {
-  const url = `https://data.jsdelivr.com/v1/package/npm/${pkg}@${version}/flat`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data: { files?: { name: string }[] } = await res.json();
-  return (data.files ?? []).map((f) => f.name.replace(/^\//, ''));
-}
-
-// ─── wildcard helpers ─────────────────────────────────────────────────────────
-
-/**
- * Convert a glob pattern (with a single `*`) to a RegExp that captures the `*` part.
- * Input: "dist/*.mjs"  →  /^dist\/(.+)\.mjs$/
- */
-function wildcardToRegex(pattern: string): RegExp {
-  // Escape regex specials except *, then replace * with a capture group
-  const escaped = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escapes . but NOT *
-    .replace(/\*/g, '(.+)');               // now replace the literal *
-  return new RegExp(`^${escaped}$`);
-}
-
-/**
- * Given a wildcard export entry, expand it against the tarball file list.
- * e.g. key="*"  path="./dist/*.mjs"  →  [{key:"middleware", path:"./dist/middleware.mjs"}, ...]
- */
-function expandWildcard(
-  keyPattern: string,
-  pathPattern: string,
-  files: string[],
-): { key: string; path: string }[] {
-  // Normalize path pattern for matching (strip leading ./)
-  const normalized = pathPattern.replace(/^\.\//, '');
-  const regex = wildcardToRegex(normalized);
-
-  const results: { key: string; path: string }[] = [];
-  const seen = new Set<string>();
-
-  for (const file of files) {
-    if (!/\.(js|mjs|cjs)$/.test(file)) continue;
-    const match = file.match(regex);
-    if (!match) continue;
-
-    const captured = match[1];
-    const key = keyPattern.replace('*', captured);
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    results.push({ key, path: pathPattern.replace('*', captured) });
-  }
-
-  return results;
-}
+import { fetchPackageFiles, expandWildcard } from '../utils/wildcard';
 
 // ─── handler ──────────────────────────────────────────────────────────────────
 

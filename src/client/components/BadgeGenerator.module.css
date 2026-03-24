@@ -1,33 +1,6 @@
 .badgeGenerator {
-	padding: var(--spacing-section-block);
-	text-align: center;
-	margin-bottom: var(--spacing-section-gap);
-	background: var(--color-bg);
-	position: relative;
-
-	&::before,
-	&::after {
-		content: '';
-		position: absolute;
-		left: 0;
-		right: 0;
-		height: 1px;
-		background: var(--color-border-light);
-	}
-
-	&::before {
-		top: 0;
-		transform: translateY(0);
-		box-shadow: 0 0 0 100vw var(--color-border-light);
-		clip-path: inset(0 -100vw 0 -100vw);
-	}
-
-	&::after {
-		bottom: 0;
-		transform: translateY(0);
-		box-shadow: 0 0 0 100vw var(--color-border-light);
-		clip-path: inset(0 -100vw 0 -100vw);
-	}
+	padding: var(--spacing-section-block) 0;
+	margin-top: var(--spacing-section-gap);
 }
 
 .inputLabel {
@@ -35,84 +8,51 @@
 	font-size: var(--font-size-label);
 	color: var(--color-text-muted);
 	margin-bottom: var(--spacing-label-bottom);
-	text-align: left;
 }
 
-.inputWithButton {
+.previewRow {
 	display: flex;
-	align-items: stretch;
+	align-items: center;
+	gap: var(--spacing-row-gap);
+	flex-wrap: wrap;
+}
+
+.badgeImg {
+	display: block;
+	height: 20px;
+	width: auto;
+}
+
+.actions {
+	display: flex;
 	gap: 0;
-	margin-bottom: var(--spacing-preview-top);
 	border: 1px solid var(--color-border);
 	border-radius: 4px;
 	overflow: hidden;
-	transition: border-color 0.2s;
-
-	&:focus-within {
-		border-color: var(--color-accent);
-	}
-
-	input {
-		flex: 1;
-		padding: var(--spacing-input-block) var(--spacing-input-inline);
-		font-family: 'Cascadia Code', monospace;
-		font-size: var(--font-size-input);
-		color: var(--color-text);
-		background: var(--color-bg);
-		border: none;
-		outline: none;
-		min-width: 0;
-	}
 }
 
 .copyButton {
 	padding: var(--spacing-button-block) var(--spacing-button-inline);
 	font-family: 'Cascadia Code', monospace;
 	font-size: var(--font-size-button);
-	color: var(--color-text);
-	background: var(--color-bg);
+	color: var(--color-text-muted);
+	background: transparent;
 	border: none;
-	border-left: 1px solid var(--color-border);
+	border-right: 1px solid var(--color-border);
 	cursor: pointer;
-	transition: all 0.2s;
+	transition: all 0.15s;
 	white-space: nowrap;
 
+	&:last-child {
+		border-right: none;
+	}
+
 	&:hover {
-		background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
 		color: var(--color-accent);
+		background: color-mix(in srgb, var(--color-accent) 8%, transparent);
 	}
 
 	&:active {
-		background: color-mix(in srgb, var(--color-accent) 15%, var(--color-bg));
-	}
-}
-
-.livePreview {
-	padding-top: var(--spacing-preview-top);
-	border-top: 1px dotted var(--color-border-light);
-
-	img {
-		max-width: 100%;
-		height: auto;
-	}
-}
-
-.badgeUrl {
-	margin-bottom: var(--spacing-preview-top);
-}
-
-@media (max-width: 480px) {
-	.inputLabel {
-		font-size: var(--font-size-label-mobile);
-	}
-
-	.inputWithButton input {
-		font-size: var(--font-size-input-mobile);
-		padding: var(--spacing-input-block-mobile) var(--spacing-input-inline-mobile);
-	}
-
-	.copyButton {
-		font-size: var(--font-size-button-mobile);
-		padding: var(--spacing-button-block-mobile) var(--spacing-button-inline-mobile);
+		background: color-mix(in srgb, var(--color-accent) 14%, transparent);
 	}
 }

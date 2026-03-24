@@ -5,6 +5,7 @@ import { LoadingOverlay } from './components/LoadingOverlay';
 import { BundleHistory } from './components/BundleHistory';
 import { Waterfall } from './components/Waterfall';
 import { OutputTabs } from './components/OutputTabs';
+import { BadgeGenerator } from './components/BadgeGenerator';
 import {
 	measurePackages,
 	getBrowserInfo,
@@ -289,6 +290,11 @@ export function App() {
 							cdn={measuredCdn()}
 						/>
 					</section>
+				</Show>
+
+				{/* ── Badge ───────────────────────────────────────────────── */}
+				<Show when={firstPkg()}>
+					<BadgeGenerator pkg={firstPkg} />
 				</Show>
 
 				{/* ── Version history ─────────────────────────────────────── */}
