@@ -150,46 +150,37 @@
 	}
 }
 
-.suggestions {
-	margin-top: 0.4rem;
-	max-width: 100%;
-	overflow: hidden;
+.exportGroup {
+	flex: 1 1 auto;
+	min-width: 0;
 }
 
-.suggestLabel {
-	font-size: var(--font-size-xs);
-	color: var(--color-text-muted);
-	display: block;
-	margin-bottom: 0.2rem;
-}
-
-.suggestChips {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.25rem;
-}
-
-.chip {
-	background: none;
-	border: 1px solid var(--color-border);
-	border-radius: 2px;
-	padding: 0.05rem 0.35rem;
+.exportSelect {
+	width: 100%;
+	padding: var(--spacing-input-block) 0;
+	padding-right: var(--spacing-select-pr);
 	font-family: 'Cascadia Code', monospace;
-	font-size: var(--font-size-xs);
-	color: var(--color-text-muted);
+	font-size: var(--font-size-input);
+	color: var(--color-text);
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--color-border);
+	outline: none;
 	cursor: pointer;
-	transition: color 0.15s, border-color 0.15s, background 0.15s;
+	transition: border-color 0.2s;
+	appearance: none;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right var(--spacing-hairline) center;
 
-	&:hover {
-		color: var(--color-accent);
-		border-color: var(--color-accent);
+	&:focus {
+		border-bottom-color: var(--color-accent);
 	}
-}
 
-.chipActive {
-	color: var(--color-accent);
-	border-color: var(--color-accent);
-	background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+	&:disabled {
+		opacity: 0.35;
+		cursor: default;
+	}
 }
 
 .error {

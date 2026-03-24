@@ -1,4 +1,4 @@
-import { createSignal, createEffect, on, Show, For, onCleanup, onMount, batch } from 'solid-js';
+import { createSignal, createEffect, on, Show, For, onMount, batch } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LoadingOverlay } from './components/LoadingOverlay';
@@ -48,18 +48,6 @@ function parseInput(input: string): { pkg: string; exportKey: string } {
 	return { pkg: s.slice(0, slash), exportKey: s.slice(slash + 1) };
 }
 
-/** Sync the ?export= query param immediately (called on chip click). */
-function syncExportParam(exp: string) {
-	const params = new URLSearchParams(window.location.search);
-	if (exp && exp !== 'index') {
-		params.set('export', exp);
-	} else {
-		params.delete('export');
-	}
-	const qs = params.toString();
-	history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
-}
-
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export function App() {
@@ -68,15 +56,14 @@ export function App() {
 	const initialPkg = getQueryParam('pkg') ?? 'react';
 	const initialExport = getQueryParam('export');
 
-	// pkgInput = live text-field value (updates on every keystroke, drives discover)
-	// pkg      = committed value (only updates when the user clicks Measure / presses Enter)
+	// pkgInput = live text-field value
+	// pkg      = committed value (only updates when the user clicks check)
 	const [pkgInput, setPkgInput] = createSignal(initialPkg);
 	const [pkg, setPkg] = createSignal(initialPkg);
 	const [cdn, setCdn] = createSignal<CDN>('jsdelivr');
 
-	// Derived: package name only (no export suffix)
-	const firstPkgInput = () => parseInput(pkgInput()).pkg; // for discover / chip display
-	const firstPkg = () => parseInput(pkg()).pkg;           // for data fetching / URL sync
+	// Derived: committed package name only (no export suffix)
+	const firstPkg = () => parseInput(pkg()).pkg;
 
 	// ── Commit helpers ──────────────────────────────────────────────────────────
 
@@ -100,30 +87,10 @@ export function App() {
 		history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
 	}
 
-	// ── Discovery (suggestions) ────────────────────────────────────────────────
-	// Driven by the draft input so chips update as the user types.
+	// ── Discovery ───────────────────────────────────────────────────────────────
+	// Only populated by handleMeasure — no live/reactive fetching.
 
 	const [discoverData, setDiscoverData] = createSignal<DiscoverResult | null>(null);
-	const [discoverPkg, setDiscoverPkg] = createSignal('');
-
-	let discoverTimer: number | undefined;
-	createEffect(() => {
-		const p = firstPkgInput();
-		if (discoverTimer) window.clearTimeout(discoverTimer);
-		if (!p.trim()) return;
-		discoverTimer = window.setTimeout(async () => {
-			try {
-				const res = await fetch(`/_discover/${encodeURIComponent(p)}`);
-				if (!res.ok) return;
-				const data = (await res.json()) as DiscoverResult;
-				setDiscoverData(data);
-				setDiscoverPkg(p);
-			} catch {}
-		}, 600);
-	});
-	onCleanup(() => {
-		if (discoverTimer) window.clearTimeout(discoverTimer);
-	});
 
 	// ── Measurement state ───────────────────────────────────────────────────────
 
@@ -133,6 +100,28 @@ export function App() {
 	const [measuredEntries, setMeasuredEntries] = createSignal<MeasurementEntry[] | null>(null);
 	const [measuredCdn, setMeasuredCdn] = createSignal<CDN>('jsdelivr');
 	const [measuredInput, setMeasuredInput] = createSignal<string | null>(null);
+	const [measuredExport, setMeasuredExport] = createSignal('');
+
+	// ── Export selection ────────────────────────────────────────────────────────
+
+	const [selectedExport, setSelectedExport] = createSignal(initialExport ?? '');
+
+	// When the committed package changes, reset export + discover data + results.
+	createEffect(on(firstPkg, () => {
+		setSelectedExport('');
+		setDiscoverData(null);
+		setResources(null);
+		setMeasuredEntries(null);
+	}, { defer: true }));
+
+	// ── isDirty ─────────────────────────────────────────────────────────────────
+	// Button is active when input, CDN, or export differs from last measurement.
+
+	const isDirty = () =>
+		measuredInput() === null ||
+		pkgInput() !== measuredInput() ||
+		cdn() !== measuredCdn() ||
+		selectedExport() !== measuredExport();
 
 	// ── Measure handler ─────────────────────────────────────────────────────────
 	// Commits the draft input, then runs browser measurement.
@@ -152,10 +141,11 @@ export function App() {
 		});
 
 		try {
-			// 1. Resolve version via /_discover
+			// 1. Resolve version + exports via /_discover
 			const res0 = await fetch(`/_discover/${encodeURIComponent(pkgName)}`);
 			if (!res0.ok) throw new Error(`Could not resolve ${pkgName}: ${res0.statusText}`);
 			const dr = (await res0.json()) as DiscoverResult;
+			setDiscoverData(dr);
 
 			// 2. Single measurement entry: package + selected export
 			const exportKey = selectedExport() || 'index';
@@ -187,6 +177,7 @@ export function App() {
 				setMeasuredEntries(entries);
 				setMeasuredCdn(selectedCdn);
 				setMeasuredInput(pkgInput());
+				setMeasuredExport(selectedExport());
 			});
 		} catch (err) {
 			setMeasureError(err instanceof Error ? err.message : 'Measurement failed');
@@ -194,31 +185,6 @@ export function App() {
 			setMeasuring(false);
 		}
 	};
-
-	// Button is dirty (changed since last measurement) when the input or CDN
-	// differs from what produced the current results, or when no results exist yet.
-	const isDirty = () =>
-		measuredInput() === null ||
-		pkgInput() !== measuredInput() ||
-		cdn() !== measuredCdn();
-
-	// ── Export selection ────────────────────────────────────────────────────────
-	// Driven by chip clicks; also resets when the committed package changes.
-
-	const [selectedExport, setSelectedExport] = createSignal(initialExport ?? '');
-
-	// Reset export (and clear stale measurement results) when pkg is committed.
-	createEffect(on(firstPkg, () => {
-		setSelectedExport('');
-		setResources(null);
-		setMeasuredEntries(null);
-	}, { defer: true }));
-
-	// Clear stale measurement results when a different export is selected.
-	createEffect(on(selectedExport, () => {
-		setResources(null);
-		setMeasuredEntries(null);
-	}, { defer: true }));
 
 	// Auto-measure on initial load only when query params are present.
 	onMount(() => { if (getQueryParam('pkg') !== null) void handleMeasure(); });
@@ -251,6 +217,29 @@ export function App() {
 							/>
 						</div>
 
+						<div class={styles.exportGroup}>
+							<label class={styles.inputLabel}>export</label>
+							<select
+								class={styles.exportSelect}
+								value={selectedExport()}
+								onChange={(e) => setSelectedExport(e.currentTarget.value)}
+								disabled={!discoverData()}
+							>
+								<Show when={!discoverData()}>
+									<option value="">—</option>
+								</Show>
+								<For each={discoverData()?.exports ?? []}>
+									{(exp) => {
+										const key = exp.key === 'index' ? '' : exp.key;
+										const label = exp.key === 'index'
+											? discoverData()!.package
+											: `${discoverData()!.package}/${exp.key}`;
+										return <option value={key}>{label}</option>;
+									}}
+								</For>
+							</select>
+						</div>
+
 						<div class={styles.cdnGroup}>
 							<label class={styles.inputLabel}>cdn</label>
 							<select
@@ -271,36 +260,6 @@ export function App() {
 							aria-label="measure"
 						>&#x25B6; check</button>
 					</div>
-
-					{/* Suggestions from /_discover — shown as soon as discover data
-					    matches the current draft input (updates as you type). */}
-					<Show when={discoverData() && discoverPkg() === firstPkgInput()}>
-						<div class={styles.suggestions}>
-							<span class={styles.suggestLabel}>
-								{discoverData()!.package}@{discoverData()!.version} exports:
-							</span>
-							<div class={styles.suggestChips}>
-								<For each={discoverData()!.exports}>
-									{(exp) => {
-										const key = () => (exp.key === 'index' ? '' : exp.key);
-										return (
-											<button
-												class={`${styles.chip}${key() === selectedExport() ? ` ${styles.chipActive}` : ''}`}
-												onClick={() => {
-													setSelectedExport(key());
-													syncExportParam(key());
-												}}
-											>
-												{exp.key === 'index'
-													? discoverData()!.package
-													: `${discoverData()!.package}/${exp.key}`}
-											</button>
-										);
-									}}
-								</For>
-							</div>
-						</div>
-					</Show>
 				</div>
 
 				{/* ── Error ──────────────────────────────────────────────── */}
@@ -337,10 +296,7 @@ export function App() {
 					pkg={firstPkg()}
 					onLoading={handleLoading}
 					selectedExport={selectedExport()}
-					onExportChange={(k) => {
-						setSelectedExport(k);
-						syncExportParam(k);
-					}}
+					onExportChange={(k) => setSelectedExport(k)}
 					exports={discoverData()?.exports ?? null}
 				/>
 			</div>
