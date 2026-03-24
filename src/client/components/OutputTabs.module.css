@@ -1,0 +1,91 @@
+.outputTabs {
+	margin: var(--spacing-section-block);
+	font-size: var(--font-size-sm);
+}
+
+.tabBar {
+	display: flex;
+	gap: 0;
+	border-bottom: 1px solid var(--color-border);
+	margin-bottom: 0;
+}
+
+.tabBtn {
+	background: none;
+	border: none;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -1px;
+	padding: var(--spacing-compact-block) var(--spacing-table-inline);
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-xs);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition: color 0.15s, border-color 0.15s;
+
+	&:hover {
+		color: var(--color-text);
+	}
+}
+
+.tabBtn.active {
+	color: var(--color-accent);
+	border-bottom-color: var(--color-accent);
+}
+
+.tabPanel {
+	padding: var(--spacing-compact-block) 0;
+}
+
+.codeWrap {
+	position: relative;
+}
+
+.copyBtn {
+	position: absolute;
+	top: 0.25rem;
+	right: 0.25rem;
+	background: none;
+	border: 1px solid var(--color-border);
+	padding: 0.1rem 0.4rem;
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-xs);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	border-radius: 2px;
+	transition: color 0.15s, border-color 0.15s;
+
+	&:hover {
+		color: var(--color-accent);
+		border-color: var(--color-accent);
+	}
+}
+
+.code {
+	background: var(--color-grid);
+	border: 1px solid var(--color-border);
+	border-radius: 2px;
+	padding: 0.5rem;
+	font-size: var(--font-size-xs);
+	overflow-x: auto;
+	white-space: pre;
+	color: var(--color-text);
+	line-height: 1.5;
+}
+
+.loading {
+	color: var(--color-text-muted);
+	font-size: var(--font-size-xs);
+	padding: 0.25rem 0;
+}
+
+.warnings {
+	margin-top: 0.5rem;
+	padding-left: 1.2rem;
+	font-size: var(--font-size-xs);
+	color: var(--color-text-muted);
+	list-style: disc;
+}
+
+.warnings strong {
+	color: var(--color-text);
+}

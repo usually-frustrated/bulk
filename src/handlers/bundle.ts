@@ -2,7 +2,7 @@ import type { Env } from '../types';
 import { parseBundlePath } from '../utils/bundle-parse';
 import { CDNS, DEFAULT_CDN, buildCdnUrl, measureSize } from '../utils/cdn';
 import type { CDN } from '../utils/cdn';
-import { resolveVersion, getPackageExports, getCachedSize, saveSize } from '../utils/db';
+import { resolveVersion, getPackageExports, getCachedSize, saveSize, getMeasuredSize } from '../utils/db';
 
 // ─── single export ───────────────────────────────────────────────────────────
 
@@ -16,10 +16,19 @@ async function handleSingleExport(
 	cdn: CDN,
 	refresh: boolean = false,
 ): Promise<Response> {
+	// Prefer real browser P50 measurements over cached HEAD estimates.
+	const browserSize = await getMeasuredSize(pkg, version, exportKey, cdn, env);
+	if (browserSize) {
+		return Response.json({ package: pkg, version, export: exportKey, cdn, ...browserSize });
+	}
+
 	if (!refresh) {
 		const cached = await getCachedSize(pkg, version, exportKey, cdn, env);
 		if (cached) {
-			return Response.json({ package: pkg, version, export: exportKey, cdn, ...cached });
+			return Response.json({
+				package: pkg, version, export: exportKey, cdn,
+				...cached, confidence: 'server-estimate',
+			});
 		}
 	}
 
@@ -31,10 +40,12 @@ async function handleSingleExport(
 
 	const url = buildCdnUrl(pkg, version, exportKey, entry.path, cdn);
 	const size = await measureSize(url);
-
 	ctx.waitUntil(saveSize(pkg, version, exportKey, cdn, size, env));
 
-	return Response.json({ package: pkg, version, export: exportKey, cdn, ...size });
+	return Response.json({
+		package: pkg, version, export: exportKey, cdn,
+		...size, confidence: 'server-estimate',
+	});
 }
 
 // ─── all exports (?exports) ──────────────────────────────────────────────────
@@ -52,18 +63,22 @@ async function handleAllExports(
 
 	const results = await Promise.all(
 		exports.map(async (entry) => {
-			if (!refresh) {
-				const cached = await getCachedSize(pkg, version, entry.key, cdn, env);
-				if (cached) return { key: entry.key, ...cached };
-			}
-
-			const url = buildCdnUrl(pkg, version, entry.key, entry.path, cdn);
 			try {
+				// Prefer real browser P50 measurements over HEAD estimates.
+				const browserSize = await getMeasuredSize(pkg, version, entry.key, cdn, env);
+				if (browserSize) return { key: entry.key, ...browserSize };
+
+				if (!refresh) {
+					const cached = await getCachedSize(pkg, version, entry.key, cdn, env);
+					if (cached) return { key: entry.key, ...cached, confidence: 'server-estimate' };
+				}
+
+				const url = buildCdnUrl(pkg, version, entry.key, entry.path, cdn);
 				const size = await measureSize(url);
 				ctx.waitUntil(saveSize(pkg, version, entry.key, cdn, size, env));
-				return { key: entry.key, ...size };
+				return { key: entry.key, ...size, confidence: 'server-estimate' };
 			} catch {
-				return { key: entry.key, bytes_raw: null, bytes_transfer: null };
+				return { key: entry.key, bytes_raw: null, bytes_transfer: null, confidence: 'no-data' };
 			}
 		}),
 	);

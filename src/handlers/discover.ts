@@ -82,7 +82,7 @@ export async function handleDiscoverRequest(
   }
 
   const url = new URL(request.url);
-  const pkgName = url.pathname.split('/').pop();
+  const pkgName = decodeURIComponent(url.pathname.slice('/_discover/'.length));
 
   if (!pkgName) {
     return new Response('Package name required', { status: 400 });

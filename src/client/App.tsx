@@ -1,89 +1,306 @@
-import { createSignal, Show, onCleanup, createEffect } from 'solid-js';
+import { createSignal, createEffect, Show, For, onCleanup, batch } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LoadingOverlay } from './components/LoadingOverlay';
-import { BundleAnalysis } from './components/BundleAnalysis';
 import { BundleHistory } from './components/BundleHistory';
+import { Waterfall } from './components/Waterfall';
+import { OutputTabs } from './components/OutputTabs';
+import {
+	measurePackages,
+	getBrowserInfo,
+	getConnectionInfo,
+	type MeasurementEntry,
+	type ResourceTimingEntry,
+} from './utils/measurement';
 import styles from './App.module.css';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type CDN = 'jsdelivr' | 'esm.sh' | 'unpkg';
+
+interface DiscoverResult {
+	package: string;
+	version: string;
+	exports: { key: string; path: string }[];
+	wildcardResolved: boolean;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getQueryParam(key: string): string | null {
 	return new URLSearchParams(window.location.search).get(key);
 }
 
+/**
+ * Parse "react/jsx-runtime" or "@reduxjs/toolkit/query/react" into
+ * {pkg, exportKey}. Scoped packages (@scope/name) are handled correctly.
+ */
+function parseInput(input: string): { pkg: string; exportKey: string } {
+	const s = input.trim();
+	if (s.startsWith('@')) {
+		const parts = s.split('/');
+		if (parts.length <= 2) return { pkg: s, exportKey: 'index' };
+		return { pkg: parts.slice(0, 2).join('/'), exportKey: parts.slice(2).join('/') };
+	}
+	const slash = s.indexOf('/');
+	if (slash === -1) return { pkg: s, exportKey: 'index' };
+	return { pkg: s.slice(0, slash), exportKey: s.slice(slash + 1) };
+}
+
+// ─── App ──────────────────────────────────────────────────────────────────────
+
 export function App() {
+	// ── Inputs ─────────────────────────────────────────────────────────────────
+
+	// One entry per line; seed from ?pkg= and ?export=
 	const initialPkg = getQueryParam('pkg') ?? 'react';
-	const initialExport = getQueryParam('export') ?? undefined;
+	const initialExport = getQueryParam('export');
+	const initialLines = initialExport
+		? `${initialPkg}/${initialExport}`
+		: initialPkg;
 
-	const [pkg, setPkg] = createSignal(initialPkg);
-	const [inputValue, setInputValue] = createSignal(initialPkg);
+	const [pkgLines, setPkgLines] = createSignal(initialLines);
+	const [cdn, setCdn] = createSignal<CDN>('jsdelivr');
 
-	// Debounce input: only update pkg 500ms after user stops typing
-	let debounceTimer: number | undefined;
+	// Debounce URL sync for pkg
+	const firstPkg = () => {
+		const first = pkgLines().split('\n').find((l) => l.trim());
+		return parseInput(first ?? 'react').pkg;
+	};
+
+	let urlSyncTimer: number | undefined;
 	createEffect(() => {
-		const value = inputValue();
-		if (debounceTimer) {
-			window.clearTimeout(debounceTimer);
-		}
-		debounceTimer = window.setTimeout(() => {
-			setPkg(value.trim());
-		}, 500);
+		const pkg = firstPkg();
+		if (urlSyncTimer) window.clearTimeout(urlSyncTimer);
+		urlSyncTimer = window.setTimeout(() => {
+			const params = new URLSearchParams(window.location.search);
+			if (pkg && pkg !== 'react') {
+				params.set('pkg', pkg);
+			} else {
+				params.delete('pkg');
+			}
+			params.delete('export');
+			const qs = params.toString();
+			history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+		}, 400);
 	});
 	onCleanup(() => {
-		if (debounceTimer) {
-			window.clearTimeout(debounceTimer);
-		}
+		if (urlSyncTimer) window.clearTimeout(urlSyncTimer);
 	});
 
-	// Keep URL in sync so state is shareable
+	// ── Discovery (suggestions) ────────────────────────────────────────────────
+
+	const [discoverData, setDiscoverData] = createSignal<DiscoverResult | null>(null);
+	const [discoverPkg, setDiscoverPkg] = createSignal('');
+
+	let discoverTimer: number | undefined;
 	createEffect(() => {
-		const p = pkg();
-		const params = new URLSearchParams(window.location.search);
-		if (p && p !== 'react') {
-			params.set('pkg', p);
-		} else {
-			params.delete('pkg');
-		}
-		const qs = params.toString();
-		history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+		const pkg = firstPkg();
+		if (discoverTimer) window.clearTimeout(discoverTimer);
+		if (!pkg.trim()) return;
+		discoverTimer = window.setTimeout(async () => {
+			try {
+				const res = await fetch(`/_discover/${encodeURIComponent(pkg)}`);
+				if (!res.ok) return;
+				const data = (await res.json()) as DiscoverResult;
+				setDiscoverData(data);
+				setDiscoverPkg(pkg);
+			} catch {}
+		}, 600);
+	});
+	onCleanup(() => {
+		if (discoverTimer) window.clearTimeout(discoverTimer);
 	});
 
-	// Counter-based loading: overlay stays up until ALL active fetches finish
+	// ── Measurement state ───────────────────────────────────────────────────────
+
+	const [measuring, setMeasuring] = createSignal(false);
+	const [measureError, setMeasureError] = createSignal<string | null>(null);
+	const [resources, setResources] = createSignal<ResourceTimingEntry[] | null>(null);
+	const [measuredEntries, setMeasuredEntries] = createSignal<MeasurementEntry[] | null>(null);
+	const [measuredCdn, setMeasuredCdn] = createSignal<CDN>('jsdelivr');
+
+	// ── Measure handler ─────────────────────────────────────────────────────────
+
+	const handleMeasure = async () => {
+		const lines = pkgLines()
+			.split('\n')
+			.map((l) => l.trim())
+			.filter(Boolean);
+		if (!lines.length) return;
+
+		batch(() => {
+			setMeasuring(true);
+			setMeasureError(null);
+			setResources(null);
+			setMeasuredEntries(null);
+		});
+
+		try {
+			// 1. Resolve version for each unique package via /_discover
+			const uniquePkgs = [...new Set(lines.map((l) => parseInput(l).pkg))];
+			const discoverMap = new Map<string, DiscoverResult>();
+
+			await Promise.all(
+				uniquePkgs.map(async (pkg) => {
+					const res = await fetch(`/_discover/${encodeURIComponent(pkg)}`);
+					if (!res.ok) throw new Error(`Could not resolve ${pkg}: ${res.statusText}`);
+					discoverMap.set(pkg, (await res.json()) as DiscoverResult);
+				}),
+			);
+
+			// 2. Build MeasurementEntry list
+			const entries: MeasurementEntry[] = lines.map((line) => {
+				const { pkg, exportKey } = parseInput(line);
+				const dr = discoverMap.get(pkg);
+				if (!dr) throw new Error(`No discovery data for ${pkg}`);
+				return { pkg, version: dr.version, exportKey };
+			});
+
+			// 3. Run browser measurement in iframe
+			const selectedCdn = cdn();
+			const rawResources = await measurePackages(entries, selectedCdn);
+
+			// 4. Report to /_record (fire-and-forget)
+			const annotated = rawResources.filter(
+				(r) => r.pkg && typeof r.transferSize === 'number' && r.transferSize > 0,
+			);
+			if (annotated.length) {
+				fetch('/_record', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						cdn: selectedCdn,
+						browser: getBrowserInfo(),
+						connection: getConnectionInfo(),
+						resources: annotated,
+					}),
+				}).catch(() => {});
+			}
+
+			batch(() => {
+				setResources(rawResources);
+				setMeasuredEntries(entries);
+				setMeasuredCdn(selectedCdn);
+			});
+		} catch (err) {
+			setMeasureError(err instanceof Error ? err.message : 'Measurement failed');
+		} finally {
+			setMeasuring(false);
+		}
+	};
+
+	// ── Loading overlay (for BundleHistory) ────────────────────────────────────
+
 	const [loadingCount, setLoadingCount] = createSignal(0);
-	const loading = () => loadingCount() > 0;
+	const loading = () => loadingCount() > 0 || measuring();
 	const handleLoading = (v: boolean) => setLoadingCount((c) => Math.max(0, c + (v ? 1 : -1)));
+
+	// ── Render ──────────────────────────────────────────────────────────────────
 
 	return (
 		<main>
 			<div class="hero-section">
 				<Header />
-				
+
+				{/* ── Inputs ─────────────────────────────────────────────── */}
 				<div class={styles.pkgInputWrap}>
 					<div class={styles.inputRow}>
 						<div class={styles.inputGroup}>
-							<label for="pkg-input" class={styles.inputLabel}>
-								Enter npm package name
-							</label>
-							<input
-								id="pkg-input"
-								type="text"
-								class={styles.pkgInput}
-								value={inputValue()}
-								onInput={(e) => setInputValue(e.currentTarget.value.trim())}
-								onKeyDown={(e) => e.key === 'Enter' && setPkg(inputValue().trim())}
-								placeholder="react, zustand, lodash, date-fns"
+							<label class={styles.inputLabel}>packages / exports (one per line)</label>
+							<textarea
+								class={styles.pkgTextarea}
+								value={pkgLines()}
+								onInput={(e) => setPkgLines(e.currentTarget.value)}
+								placeholder={'react\nreact/jsx-runtime\n@reduxjs/toolkit'}
+								rows={3}
+								spellcheck={false}
 							/>
 						</div>
+
+						<div class={styles.cdnGroup}>
+							<label class={styles.inputLabel}>cdn</label>
+							<select
+								class={styles.cdnSelect}
+								value={cdn()}
+								onChange={(e) => setCdn(e.currentTarget.value as CDN)}
+							>
+								<option value="jsdelivr">jsDelivr</option>
+								<option value="esm.sh">esm.sh</option>
+								<option value="unpkg">unpkg</option>
+							</select>
+						</div>
 					</div>
+
+					<button
+						class={styles.measureBtn}
+						onClick={handleMeasure}
+						disabled={measuring()}
+					>
+						{measuring() ? 'measuring…' : 'measure'}
+					</button>
+
+					{/* Suggestions from /_discover */}
+					<Show when={discoverData() && discoverPkg() === firstPkg()}>
+						<div class={styles.suggestions}>
+							<span class={styles.suggestLabel}>
+								{discoverData()!.package}@{discoverData()!.version} exports:
+							</span>
+							<div class={styles.suggestChips}>
+								<For each={discoverData()!.exports}>
+									{(exp) => (
+										<button
+											class={styles.chip}
+											onClick={() => {
+												const specifier =
+													exp.key === 'index'
+														? discoverData()!.package
+														: `${discoverData()!.package}/${exp.key}`;
+												const existing = pkgLines()
+													.split('\n')
+													.map((l) => l.trim())
+													.filter(Boolean);
+												if (!existing.includes(specifier)) {
+													setPkgLines([...existing, specifier].join('\n'));
+												}
+											}}
+										>
+											{exp.key === 'index' ? discoverData()!.package : exp.key}
+										</button>
+									)}
+								</For>
+							</div>
+						</div>
+					</Show>
 				</div>
 
-				<div class={styles.badgePreview}>
-					<img src={`/${pkg()}`} alt={`${pkg()} bundle size`} />
-				</div>
+				{/* ── Error ──────────────────────────────────────────────── */}
+				<Show when={measureError()}>
+					<p class={styles.error}>{measureError()}</p>
+				</Show>
 
-				<BundleAnalysis pkg={pkg()} onLoading={handleLoading} />
-				<BundleHistory pkg={pkg()} onLoading={handleLoading} initialExport={initialExport} />
+				{/* ── Results: waterfall + output tabs ───────────────────── */}
+				<Show when={resources() !== null && measuredEntries() !== null}>
+					<section class={styles.results}>
+						<Waterfall resources={resources()!} />
+						<OutputTabs
+							entries={measuredEntries()!}
+							resources={resources()!}
+							cdn={measuredCdn()}
+						/>
+					</section>
+				</Show>
+
+				{/* ── Version history ─────────────────────────────────────── */}
+				<BundleHistory
+					pkg={firstPkg()}
+					onLoading={handleLoading}
+					initialExport={initialExport ?? undefined}
+				/>
 			</div>
+
 			<Footer />
+
 			<Show when={loading()}>
 				<LoadingOverlay />
 			</Show>

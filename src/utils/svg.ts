@@ -1,3 +1,5 @@
+import type { Confidence } from './cdn';
+
 // ─── shared constants ─────────────────────────────────────────────────────────
 
 const FONT = "Verdana,Geneva,DejaVu Sans,sans-serif";
@@ -31,19 +33,48 @@ function esc(s: string): string {
 }
 
 // ─── 1. COMPACT BADGE ────────────────────────────────────────────────────────
-// Classic two-pill shield: "bulk | 170 B · esm.sh"
+// Classic two-pill shield.  The right pill reflects the confidence tier:
+//
+//   established    → green,  clean value                 "170 B"
+//   tentative      → yellow, value + asterisk            "170 B *"
+//   server-estimate→ yellow, tilde-prefixed value        "~170 B"
+//   no-data        → dark,   call-to-action label        "measure →"
+//
 // Use: ![](https://bulk.frustrated.dev/jsdelivr/zustand)
 
-export function generateBadgeSvg(label: string, value: string, isError: boolean): string {
+export function generateBadgeSvg(label: string, value: string, confidence: Confidence): string {
+	let displayValue: string;
+	let vc: string;
+
+	switch (confidence) {
+		case 'established':
+			displayValue = value;
+			vc = C.green;
+			break;
+		case 'tentative':
+			displayValue = `${value} *`;
+			vc = C.yellow;
+			break;
+		case 'server-estimate':
+			displayValue = `~${value}`;
+			vc = C.yellow;
+			break;
+		case 'no-data':
+			displayValue = 'measure \u2192';
+			vc = C.pill_bg;
+			break;
+	}
+
 	const lw = tw(label) + 18;
-	const vw = tw(value) + 18;
+	const vw = tw(displayValue) + 18;
 	const W = lw + vw;
 	const lx = lw / 2;
 	const vx = lw + vw / 2;
-	const vc = isError ? C.red : C.green;
+	// For no-data, render the CTA text in accent blue instead of white.
+	const vtextFill = confidence === 'no-data' ? C.accent : '#fff';
 
-	return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(label)}: ${esc(value)}">
-  <title>${esc(label)}: ${esc(value)}</title>
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(label)}: ${esc(displayValue)}">
+  <title>${esc(label)}: ${esc(displayValue)}</title>
   <defs>
     <linearGradient id="g" x2="0" y2="100%">
       <stop offset="0" stop-color="#fff" stop-opacity=".07"/>
@@ -56,11 +87,11 @@ export function generateBadgeSvg(label: string, value: string, isError: boolean)
     <rect x="${lw}" width="${vw}" height="${H}" fill="${vc}"/>
     <rect width="${W}" height="${H}" fill="url(#g)"/>
   </g>
-  <g text-anchor="middle" font-family="${FONT}" font-size="11" fill="#fff">
+  <g text-anchor="middle" font-family="${FONT}" font-size="11">
     <text x="${lx}" y="14" fill="#000" fill-opacity=".25" aria-hidden="true">${esc(label)}</text>
-    <text x="${lx}" y="13">${esc(label)}</text>
-    <text x="${vx}" y="14" fill="#000" fill-opacity=".25" aria-hidden="true">${esc(value)}</text>
-    <text x="${vx}" y="13">${esc(value)}</text>
+    <text x="${lx}" y="13" fill="#fff">${esc(label)}</text>
+    <text x="${vx}" y="14" fill="#000" fill-opacity=".25" aria-hidden="true">${esc(displayValue)}</text>
+    <text x="${vx}" y="13" fill="${vtextFill}">${esc(displayValue)}</text>
   </g>
 </svg>`.trim();
 }

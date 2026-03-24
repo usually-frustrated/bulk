@@ -24,7 +24,7 @@ export async function handleBannerRequest(
 	
 	if (type === 'compact') {
 		const size = 170; // Example size
-		const svg = generateBadgeSvg(`${pkg}@${version}`, formatSize(size), false);
+		const svg = generateBadgeSvg(`${pkg}@${version}`, formatSize(size), 'server-estimate');
 		
 		return new Response(svg, { 
 			headers: { 

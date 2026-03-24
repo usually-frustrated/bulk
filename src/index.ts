@@ -43,6 +43,6 @@ export default {
 			return env.ASSETS.fetch(request);
 		}
 
-		return handleBadgeRequest(request, ctx);
+		return handleBadgeRequest(request, env, ctx);
 	},
 };
