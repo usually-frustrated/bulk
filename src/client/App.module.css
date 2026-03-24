@@ -113,6 +113,16 @@
 	}
 }
 
+.runBtnDirty {
+	color: oklch(62% 0.17 145);
+	border-bottom-color: oklch(62% 0.17 145);
+
+	&:hover:not(:disabled) {
+		color: oklch(68% 0.19 145);
+		border-bottom-color: oklch(68% 0.19 145);
+	}
+}
+
 .measureBtn {
 	margin-top: 0.5rem;
 	padding: var(--spacing-button-block) var(--spacing-button-inline);

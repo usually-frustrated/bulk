@@ -140,6 +140,7 @@ export function App() {
 	const [resources, setResources] = createSignal<ResourceTimingEntry[] | null>(null);
 	const [measuredEntries, setMeasuredEntries] = createSignal<MeasurementEntry[] | null>(null);
 	const [measuredCdn, setMeasuredCdn] = createSignal<CDN>('jsdelivr');
+	const [measuredInput, setMeasuredInput] = createSignal<string | null>(null);
 
 	// ── Measure handler ─────────────────────────────────────────────────────────
 	// Commits the draft input, then runs browser measurement.
@@ -192,6 +193,7 @@ export function App() {
 				setResources(rawResources);
 				setMeasuredEntries(entries);
 				setMeasuredCdn(selectedCdn);
+				setMeasuredInput(pkgInput());
 			});
 		} catch (err) {
 			setMeasureError(err instanceof Error ? err.message : 'Measurement failed');
@@ -199,6 +201,13 @@ export function App() {
 			setMeasuring(false);
 		}
 	};
+
+	// Button is dirty (changed since last measurement) when the input or CDN
+	// differs from what produced the current results, or when no results exist yet.
+	const isDirty = () =>
+		measuredInput() === null ||
+		pkgInput() !== measuredInput() ||
+		cdn() !== measuredCdn();
 
 	// ── Export selection ────────────────────────────────────────────────────────
 	// Driven by chip clicks; also resets when the committed package changes.
@@ -250,9 +259,9 @@ export function App() {
 						</div>
 
 						<button
-							class={styles.runBtn}
+							classList={{ [styles.runBtn]: true, [styles.runBtnDirty]: isDirty() }}
 							onClick={handleMeasure}
-							disabled={measuring()}
+							disabled={measuring() || !isDirty()}
 							aria-label="measure"
 						>&#x25B6;</button>
 
