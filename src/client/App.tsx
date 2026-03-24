@@ -48,6 +48,18 @@ function parseInput(input: string): { pkg: string; exportKey: string } {
 	return { pkg: s.slice(0, slash), exportKey: s.slice(slash + 1) };
 }
 
+/** Sync the ?export= query param immediately (called on chip click). */
+function syncExportParam(exp: string) {
+	const params = new URLSearchParams(window.location.search);
+	if (exp && exp !== 'index') {
+		params.set('export', exp);
+	} else {
+		params.delete('export');
+	}
+	const qs = params.toString();
+	history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export function App() {
@@ -56,19 +68,34 @@ export function App() {
 	const initialPkg = getQueryParam('pkg') ?? 'react';
 	const initialExport = getQueryParam('export');
 
+	// pkgInput = live text-field value (updates on every keystroke, drives discover)
+	// pkg      = committed value (only updates when the user clicks Measure / presses Enter)
+	const [pkgInput, setPkgInput] = createSignal(initialPkg);
 	const [pkg, setPkg] = createSignal(initialPkg);
 	const [cdn, setCdn] = createSignal<CDN>('jsdelivr');
 
-	const firstPkg = () => parseInput(pkg()).pkg;
+	// Derived: package name only (no export suffix)
+	const firstPkgInput = () => parseInput(pkgInput()).pkg; // for discover / chip display
+	const firstPkg = () => parseInput(pkg()).pkg;           // for data fetching / URL sync
+
+	// ── Commit helpers ──────────────────────────────────────────────────────────
+
+	/** Commit the current draft input as the active package. */
+	function commitPkg() {
+		setPkg(pkgInput());
+	}
+
+	// ── URL sync (pkg) ──────────────────────────────────────────────────────────
+	// Syncs the committed pkg to ?pkg= (debounced to avoid thrashing history).
 
 	let urlSyncTimer: number | undefined;
 	createEffect(() => {
-		const pkg = firstPkg();
+		const p = firstPkg();
 		if (urlSyncTimer) window.clearTimeout(urlSyncTimer);
 		urlSyncTimer = window.setTimeout(() => {
 			const params = new URLSearchParams(window.location.search);
-			if (pkg && pkg !== 'react') {
-				params.set('pkg', pkg);
+			if (p && p !== 'react') {
+				params.set('pkg', p);
 			} else {
 				params.delete('pkg');
 			}
@@ -82,22 +109,23 @@ export function App() {
 	});
 
 	// ── Discovery (suggestions) ────────────────────────────────────────────────
+	// Driven by the draft input so chips update as the user types.
 
 	const [discoverData, setDiscoverData] = createSignal<DiscoverResult | null>(null);
 	const [discoverPkg, setDiscoverPkg] = createSignal('');
 
 	let discoverTimer: number | undefined;
 	createEffect(() => {
-		const pkg = firstPkg();
+		const p = firstPkgInput();
 		if (discoverTimer) window.clearTimeout(discoverTimer);
-		if (!pkg.trim()) return;
+		if (!p.trim()) return;
 		discoverTimer = window.setTimeout(async () => {
 			try {
-				const res = await fetch(`/_discover/${encodeURIComponent(pkg)}`);
+				const res = await fetch(`/_discover/${encodeURIComponent(p)}`);
 				if (!res.ok) return;
 				const data = (await res.json()) as DiscoverResult;
 				setDiscoverData(data);
-				setDiscoverPkg(pkg);
+				setDiscoverPkg(p);
 			} catch {}
 		}, 600);
 	});
@@ -114,9 +142,12 @@ export function App() {
 	const [measuredCdn, setMeasuredCdn] = createSignal<CDN>('jsdelivr');
 
 	// ── Measure handler ─────────────────────────────────────────────────────────
+	// Commits the draft input, then runs browser measurement.
 
 	const handleMeasure = async () => {
-		const pkgName = firstPkg();
+		// Commit the draft input before measuring.
+		commitPkg();
+		const pkgName = parseInput(pkgInput()).pkg;
 		if (!pkgName) return;
 
 		batch(() => {
@@ -169,13 +200,23 @@ export function App() {
 		}
 	};
 
-	// ── Export selection for BundleHistory ────────────────────────────────────
-	// Lifted here so chip clicks can drive it directly.
+	// ── Export selection ────────────────────────────────────────────────────────
+	// Driven by chip clicks; also resets when the committed package changes.
 
 	const [selectedExport, setSelectedExport] = createSignal(initialExport ?? '');
 
-	// Reset when the package changes (defer so it doesn't fire on mount).
-	createEffect(on(firstPkg, () => setSelectedExport(''), { defer: true }));
+	// Reset export (and clear stale measurement results) when pkg is committed.
+	createEffect(on(firstPkg, () => {
+		setSelectedExport('');
+		setResources(null);
+		setMeasuredEntries(null);
+	}, { defer: true }));
+
+	// Clear stale measurement results when a different export is selected.
+	createEffect(on(selectedExport, () => {
+		setResources(null);
+		setMeasuredEntries(null);
+	}, { defer: true }));
 
 	// ── Loading overlay (for BundleHistory) ────────────────────────────────────
 
@@ -198,8 +239,8 @@ export function App() {
 							<input
 								type="text"
 								class={styles.pkgInput}
-								value={pkg()}
-								onInput={(e) => setPkg(e.currentTarget.value.trim())}
+								value={pkgInput()}
+								onInput={(e) => setPkgInput(e.currentTarget.value.trim())}
 								placeholder="react, zustand, @reduxjs/toolkit"
 								spellcheck={false}
 								onKeyDown={(e) => e.key === 'Enter' && handleMeasure()}
@@ -228,22 +269,31 @@ export function App() {
 						{measuring() ? 'measuring…' : 'measure'}
 					</button>
 
-					{/* Suggestions from /_discover */}
-					<Show when={discoverData() && discoverPkg() === firstPkg()}>
+					{/* Suggestions from /_discover — shown as soon as discover data
+					    matches the current draft input (updates as you type). */}
+					<Show when={discoverData() && discoverPkg() === firstPkgInput()}>
 						<div class={styles.suggestions}>
 							<span class={styles.suggestLabel}>
 								{discoverData()!.package}@{discoverData()!.version} exports:
 							</span>
 							<div class={styles.suggestChips}>
 								<For each={discoverData()!.exports}>
-									{(exp) => (
-										<button
-											class={`${styles.chip}${(exp.key === 'index' ? '' : exp.key) === selectedExport() ? ` ${styles.chipActive}` : ''}`}
-											onClick={() => setSelectedExport(exp.key === 'index' ? '' : exp.key)}
-										>
-											{exp.key === 'index' ? discoverData()!.package : `${discoverData()!.package}/${exp.key}`}
-										</button>
-									)}
+									{(exp) => {
+										const key = () => (exp.key === 'index' ? '' : exp.key);
+										return (
+											<button
+												class={`${styles.chip}${key() === selectedExport() ? ` ${styles.chipActive}` : ''}`}
+												onClick={() => {
+													setSelectedExport(key());
+													syncExportParam(key());
+												}}
+											>
+												{exp.key === 'index'
+													? discoverData()!.package
+													: `${discoverData()!.package}/${exp.key}`}
+											</button>
+										);
+									}}
 								</For>
 							</div>
 						</div>
@@ -277,7 +327,10 @@ export function App() {
 					pkg={firstPkg()}
 					onLoading={handleLoading}
 					selectedExport={selectedExport()}
-					onExportChange={setSelectedExport}
+					onExportChange={(k) => {
+						setSelectedExport(k);
+						syncExportParam(k);
+					}}
 					exports={discoverData()?.exports ?? null}
 				/>
 			</div>

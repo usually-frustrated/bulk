@@ -5,7 +5,7 @@ CF Worker · SolidJS · Bun · Wrangler · TypeScript · D1(SQLite) · vitest
 
 ## ⌂ layout
 ```
-src/index.ts              ← worker entry · router (badge|bundle|history|assets)
+src/index.ts              ← worker entry · router (see routing section)
 src/types.ts              ← Env{ASSETS:Fetcher, DB:D1Database}
 src/constants.ts          ← SVG: CHAR_WIDTH · PAD_X · BADGE_LABEL
 src/providers.ts          ← jsdelivr(dflt)|unpkg|skypack|esm.sh → {id,name,url(pkg)}
@@ -13,6 +13,10 @@ src/handlers/
   badge.ts                ← HEAD cdn → size → SVG · CF cache · telemetry
   bundle.ts               ← /_bundle/* · single/all-exports · D1 cache
   bundle-history.ts       ← /_bundle-history/* · all versions → sizes → JSON
+  discover.ts             ← /_discover/* · package.json export discovery
+  measurement.ts          ← /_record (POST) · save browser resource timings
+  banner.ts               ← /_banner/* · OG banner generation
+  clear-cache.ts          ← /_clear/* · invalidate cached sizes
 src/utils/
   pkg.ts                  ← parsePath · buildCacheControl · isImmutableVersion
   svg.ts                  ← generateBadgeSvg(label,val,isErr)→SVG string
@@ -23,7 +27,7 @@ src/utils/
   bundle-parse.ts         ← parseBundlePath("/_bundle/<pkg>[@ver][/export]")
 src/client/
   main.tsx                ← SolidJS mount → #root
-  App.tsx                 ← state(pkg,cdn,loading) · Header|ExportsTable|BundleHistory|Footer
+  App.tsx                 ← state(pkgInput,pkg,cdn,selectedExport) · two-signal input model
   style.css               ← reset + CSS vars (light/dark) + layout
   index.html              ← links /_/styles.css · loads /main.js
   components/
@@ -41,12 +45,35 @@ wrangler.jsonc            ← main=src/index.ts · assets=./public · D1 binding
 
 ## ⇒ routing (src/index.ts)
 ```
-/favicon.ico          → 404
-/_/*                  → env.ASSETS.fetch(request)   [static; auto MIME; no badge logic]
-/_bundle-history/*    → handleBundleHistory
-/_bundle/*            → handleBundleRequest
-*                     → handleBadgeRequest
+/favicon.ico             → 404   (prevent catch-all treating it as a package)
+/_/<static>              → env.ASSETS.fetch(request)  [CSS, JS, images; checked before API]
+
+── Analysis API ──────────────────────────────────────────────────────────────
+/_bundle-history/<pkg>[/<export>]  → handleBundleHistory   (version size trends)
+/_bundle/<pkg>[@ver][/<export>]    → handleBundleRequest    (single/all-export sizes)
+/_discover/<pkg>                   → handleDiscoverRequest  (export discovery)
+/_record  (POST)                   → handleRecordRequest    (browser timing ingestion)
+
+── Utility ───────────────────────────────────────────────────────────────────
+/_banner/<pkg>                     → handleBannerRequest    (OG banner)
+/_clear/<pkg>                      → handleClearCache       (invalidate D1 cache)
+
+── Catch-all ─────────────────────────────────────────────────────────────────
+/*                                 → handleBadgeRequest     (SVG size badge)
 ```
+Key ordering rule: `/_bundle-history/` before `/_bundle/` (prefix collision).
+Static assets `/_/` are checked before any API route.
+
+## 🖥 client input model (App.tsx)
+Two separate signals drive the package input:
+```
+pkgInput  (draft)   ← updated on every keystroke via onInput
+pkg       (committed) ← updated only when user clicks "measure" or presses Enter
+```
+- Discover fetch (`/_discover/*`) is driven by `pkgInput` so chips appear as you type.
+- All data operations (BundleHistory fetch, Waterfall measurement, URL ?pkg= sync) use
+  the committed `pkg` so they never fire on every keystroke.
+- Clicking "measure" / pressing Enter commits `pkgInput → pkg`, then runs measurement.
 
 ## 🏷 badge flow
 ```
@@ -100,6 +127,24 @@ package_versions_fetched (package,fetched_at)
 version_resolution     (package,version,fetched_at)
 ```
 
+## 🔗 URL query params
+| param | scope | description |
+|-------|-------|-------------|
+| `?pkg=` | client | committed package name; stripped if default (`react`) |
+| `?export=` | client | selected export key; updated immediately on chip click |
+| `?cdn=` | server | CDN selection for bundle/history endpoints |
+| `?refresh` | server | bypass CF cache + D1 cache for badge/bundle |
+| `?exports` | server | return all exports instead of single (bundle endpoint) |
+
+Export chip clicks update `?export=` immediately via `history.replaceState` (no debounce).
+`?pkg=` syncs from the committed `pkg` signal with a 400 ms debounce.
+
+## 🔄 stale-data prevention
+- Measurement results (Waterfall + OutputTabs) are cleared whenever `selectedExport`
+  changes (chip click) or the committed `pkg` changes (new measure button press).
+- BundleHistory re-fetches automatically when either `pkg` or `selectedExport` changes.
+- Discover chips update from the live draft input (`pkgInput`) so they stay fresh.
+
 ## 🏗 build
 ```
 bun run build-client.ts
@@ -136,6 +181,7 @@ bun run cf-typegen   # wrangler types → worker-configuration.d.ts
 
 ## ∇ invariants
 - `/_/` reserved namespace; npm package names never start with `_`
+- `/_/` (static assets) checked before API routes in worker router
 - Cache key: strip `?refresh`, append `?cache_v=v3`
 - localhost → skip CF cache entirely
 - All cache writes & telemetry → `ctx.waitUntil` (non-blocking, best-effort)
@@ -144,6 +190,7 @@ bun run cf-typegen   # wrangler types → worker-configuration.d.ts
 - Semver filter: 3-segment only, no prerelease; max ~50 versions (1 per minor)
 - `bytes_transfer` (compressed HEAD Content-Length) preferred over `bytes_raw` (GET body)
 - badge CDN = providers.ts (root pkg only); bundle CDN = cdn.ts (export-aware)
+- `pkg` signal is committed only on explicit user action (button / Enter); never on keystroke
 
 ## ⚠ known gaps / gotchas
 - badge endpoint measures **root CDN response** (not bundled/treeshaken) — good for CDN cost, not bundle impact
