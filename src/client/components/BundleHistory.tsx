@@ -1,23 +1,18 @@
 import { batch, createEffect, createSignal, For, Show } from 'solid-js';
 import styles from './BundleHistory.module.css';
 
-interface VersionData {
+interface VersionMeta {
 	version: string;
 	publishedAt: string;
+}
+
+interface VersionSize {
 	bytes_transfer: number | null;
 	bytes_raw: number | null;
 }
 
-interface HistoryData {
-	package: string;
-	export: string;
-	cdn: string;
-	versions: VersionData[];
-}
-
-/** Best available size — prefer transfer (compressed, what the browser downloads) */
-function bestBytes(v: VersionData): number | null {
-	return v.bytes_transfer ?? v.bytes_raw ?? null;
+function bestBytes(s: VersionSize): number | null {
+	return s.bytes_transfer ?? s.bytes_raw ?? null;
 }
 
 function fmtBytes(b: number): string {
@@ -49,70 +44,134 @@ function toY(bytes: number, maxBytes: number): number {
 
 interface Props {
 	pkg: string;
-	onLoading: (v: boolean) => void;
 	selectedExport: string;
-	onExportChange: (k: string) => void;
-	exports: { key: string; path: string }[] | null;
 }
 
 export function BundleHistory(props: Props) {
-	const [data, setData] = createSignal<HistoryData | null>(null);
-	const [loading, setLoading] = createSignal(false);
+	const [versions, setVersions] = createSignal<VersionMeta[]>([]);
+	const [sizes, setSizes] = createSignal<Map<string, VersionSize>>(new Map());
+	const [loadingVersions, setLoadingVersions] = createSignal(false);
+	const [generating, setGenerating] = createSignal(false);
+	const [pendingDot, setPendingDot] = createSignal<string | null>(null);
 	const [error, setError] = createSignal<string | null>(null);
 	const [hoveredIdx, setHoveredIdx] = createSignal<number | null>(null);
 
-	async function analyze() {
+	// Fetch just the version list (cheap) whenever pkg changes
+	createEffect(() => {
 		const pkg = props.pkg.trim();
 		if (!pkg) return;
-		const exp = props.selectedExport.trim() || 'index';
+		void fetchVersionList(pkg);
+	});
 
+	async function fetchVersionList(pkg: string) {
 		batch(() => {
-			setLoading(true);
+			setLoadingVersions(true);
 			setError(null);
-			setData(null);
-			setHoveredIdx(null);
+			setVersions([]);
+			setSizes(new Map());
 		});
-		props.onLoading(true);
-
 		try {
-			const res = await fetch(`/_bundle-history/${pkg}/${exp}?cdn=jsdelivr`);
+			const res = await fetch(`/_versions/${encodeURIComponent(pkg)}`);
 			if (!res.ok) throw new Error(await res.text());
-			setData((await res.json()) as HistoryData);
+			const data = (await res.json()) as { versions: VersionMeta[] };
+			setVersions(data.versions);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to load history');
+			setError(err instanceof Error ? err.message : 'Failed to load versions');
 		} finally {
-			setLoading(false);
-			props.onLoading(false);
+			setLoadingVersions(false);
 		}
 	}
 
-	// Re-analyze whenever pkg or selected export changes.
-	createEffect(() => {
-		const pkg = props.pkg; // tracked
-		const exp = props.selectedExport; // tracked
-		void exp;
-		if (pkg.trim()) void analyze();
-	});
+	async function fetchSizeForVersion(pkg: string, version: string, exportKey: string) {
+		const path = exportKey && exportKey !== 'index'
+			? `/_bundle/${encodeURIComponent(pkg)}@${encodeURIComponent(version)}/${exportKey}?cdn=jsdelivr`
+			: `/_bundle/${encodeURIComponent(pkg)}@${encodeURIComponent(version)}?cdn=jsdelivr`;
+		try {
+			const res = await fetch(path);
+			if (!res.ok) return null;
+			return (await res.json()) as VersionSize;
+		} catch {
+			return null;
+		}
+	}
+
+	async function handleDotClick(version: string) {
+		if (pendingDot() || generating()) return;
+		const pkg = props.pkg.trim();
+		const exportKey = props.selectedExport || 'index';
+		setPendingDot(version);
+		try {
+			const size = await fetchSizeForVersion(pkg, version, exportKey);
+			if (size) {
+				setSizes((prev) => new Map([...prev, [version, size]]));
+			}
+		} finally {
+			setPendingDot(null);
+		}
+	}
+
+	async function handleGenerate() {
+		const pkg = props.pkg.trim();
+		if (!pkg || generating()) return;
+		const exportKey = props.selectedExport || 'index';
+		setGenerating(true);
+		try {
+			// Fetch all versions in parallel, streaming results in as they arrive
+			const vs = versions();
+			await Promise.all(
+				vs.map(async (v) => {
+					if (sizes().has(v.version)) return; // already fetched
+					const size = await fetchSizeForVersion(pkg, v.version, exportKey);
+					if (size) {
+						setSizes((prev) => new Map([...prev, [v.version, size]]));
+					}
+				}),
+			);
+		} finally {
+			setGenerating(false);
+		}
+	}
 
 	// ─── chart derivations ──────────────────────────────────────────────────
 
-	const versions = () => data()?.versions ?? [];
-	const maxBytes = () => Math.max(1, ...versions().flatMap((v) => (bestBytes(v) != null ? [bestBytes(v)!] : [])));
+	const filledVersions = () => {
+		const sz = sizes();
+		return versions().filter((v) => {
+			const s = sz.get(v.version);
+			return s != null && bestBytes(s) != null;
+		});
+	};
+
+	const maxBytes = () =>
+		Math.max(1, ...filledVersions().flatMap((v) => {
+			const b = bestBytes(sizes().get(v.version)!);
+			return b != null ? [b] : [];
+		}));
 
 	const linePath = () => {
 		const vs = versions();
+		const sz = sizes();
 		const mb = maxBytes();
 		const pts = vs
-			.map((v, i) => (bestBytes(v) != null ? `${toX(i, vs.length).toFixed(1)},${toY(bestBytes(v)!, mb).toFixed(1)}` : null))
+			.map((v, i) => {
+				const s = sz.get(v.version);
+				const b = s ? bestBytes(s) : null;
+				return b != null ? `${toX(i, vs.length).toFixed(1)},${toY(b, mb).toFixed(1)}` : null;
+			})
 			.filter(Boolean) as string[];
 		return pts.length >= 2 ? 'M' + pts[0] + 'L' + pts.slice(1).join('L') : '';
 	};
 
 	const areaPath = () => {
 		const vs = versions();
+		const sz = sizes();
 		const mb = maxBytes();
 		const pts = vs
-			.map((v, i) => (bestBytes(v) != null ? ([toX(i, vs.length), toY(bestBytes(v)!, mb)] as [number, number]) : null))
+			.map((v, i) => {
+				const s = sz.get(v.version);
+				const b = s ? bestBytes(s) : null;
+				return b != null ? ([toX(i, vs.length), toY(b, mb)] as [number, number]) : null;
+			})
 			.filter((p): p is [number, number] => p !== null);
 		if (pts.length < 2) return '';
 		const bottom = PY + PH;
@@ -125,6 +184,7 @@ export function BundleHistory(props: Props) {
 
 	const yTicks = () => {
 		const mb = maxBytes();
+		if (filledVersions().length === 0) return [];
 		return [0, 0.25, 0.5, 0.75, 1].map((f) => ({
 			y: PY + PH - f * PH,
 			label: f === 0 ? '0' : fmtBytes(Math.round(f * mb)),
@@ -146,29 +206,30 @@ export function BundleHistory(props: Props) {
 		const vs = versions();
 		if (idx === null || idx >= vs.length) return null;
 		const v = vs[idx];
-		const b = bestBytes(v);
-		return { ...v, x: toX(idx, vs.length), y: b != null ? toY(b, maxBytes()) : null, bytes: b };
+		const sz = sizes();
+		const s = sz.get(v.version);
+		const b = s ? bestBytes(s) : null;
+		return {
+			version: v.version,
+			x: toX(idx, vs.length),
+			y: b != null ? toY(b, maxBytes()) : null,
+			bytes: b,
+		};
 	};
 
 	// ─── render ─────────────────────────────────────────────────────────────
 
 	return (
 		<section class={styles.bundleHistory}>
-			<div class={styles.inputRow}>
-				<button class={styles.analyzeBtn} onClick={analyze} disabled={loading()}>
-					{loading() ? '…' : 'analyze'}
-				</button>
-			</div>
-
 			<Show when={error()}>
 				<p class={styles.error}>{error()}</p>
 			</Show>
 
-			<Show when={loading()}>
-				<div class={styles.loading}>Loading version history...</div>
+			<Show when={loadingVersions()}>
+				<div class={styles.loading}>Loading versions…</div>
 			</Show>
 
-			<Show when={data()}>
+			<Show when={!loadingVersions() && versions().length > 0}>
 				<div class={styles.chartWrap}>
 					<svg
 						width="100%"
@@ -178,7 +239,7 @@ export function BundleHistory(props: Props) {
 						class={styles.chart}
 						onMouseLeave={() => setHoveredIdx(null)}
 					>
-						{/* Y grid + labels */}
+						{/* Y grid + labels (only when there's data) */}
 						<For each={yTicks()}>
 							{(tick) => (
 								<>
@@ -195,6 +256,9 @@ export function BundleHistory(props: Props) {
 								</>
 							)}
 						</For>
+
+						{/* Baseline */}
+						<line x1={PX} y1={PY + PH} x2={PX + PW} y2={PY + PH} class={styles.gridLine} />
 
 						{/* X labels */}
 						<For each={xLabels()}>
@@ -213,18 +277,30 @@ export function BundleHistory(props: Props) {
 							<path d={linePath()} fill="none" class={styles.line} />
 						</Show>
 
+						{/* Dots — hollow if no data, filled if fetched */}
 						<For each={versions()}>
-							{(v, i) => (
-								<Show when={bestBytes(v) != null}>
+							{(v, i) => {
+								const sz = sizes();
+								const s = sz.get(v.version);
+								const b = s ? bestBytes(s) : null;
+								const isPending = () => pendingDot() === v.version;
+								const cx = toX(i(), versions().length);
+								const cy = b != null ? toY(b, maxBytes()) : PY + PH / 2;
+								return (
 									<circle
-										cx={toX(i(), versions().length)}
-										cy={toY(bestBytes(v)!, maxBytes())}
-										r={4}
-										class={styles.point}
+										cx={cx}
+										cy={cy}
+										r={b != null ? 4 : 3}
+										classList={{
+											[styles.point]: b != null,
+											[styles.pointEmpty]: b == null && !isPending(),
+											[styles.pointPending]: isPending(),
+										}}
 										onMouseEnter={() => setHoveredIdx(i())}
+										onClick={() => void handleDotClick(v.version)}
 									/>
-								</Show>
-							)}
+								);
+							}}
 						</For>
 
 						<Show when={hoveredPoint()}>
@@ -232,9 +308,8 @@ export function BundleHistory(props: Props) {
 								const p = pt();
 								const onRight = p.x < VW / 2;
 								const tx = onRight ? p.x + 10 : p.x - 10;
-								const ty = Math.max(PY + 4, (p.y ?? PY) - 28);
+								const ty = Math.max(PY + 4, (p.y ?? PY + PH / 2) - 28);
 								const boxW = 94;
-
 								return (
 									<g class={styles.tooltipGroup}>
 										<line x1={p.x} y1={PY} x2={p.x} y2={PY + PH} class={styles.crosshair} />
@@ -260,7 +335,7 @@ export function BundleHistory(props: Props) {
 											text-anchor="middle"
 											class={styles.tooltipBytes}
 										>
-											{fmtBytes(p.bytes ?? 0)}
+											{p.bytes != null ? fmtBytes(p.bytes) : 'click to generate'}
 										</text>
 									</g>
 								);
@@ -270,13 +345,18 @@ export function BundleHistory(props: Props) {
 
 					<div class={styles.chartFooter}>
 						<span class={styles.statItem}>
-							{versions().filter((v) => bestBytes(v) != null).length}&thinsp;/&thinsp;
-							{versions().length} versions
+							{sizes().size}&thinsp;/&thinsp;{versions().length} versions measured
 						</span>
+						<button
+							class={styles.generateBtn}
+							onClick={handleGenerate}
+							disabled={generating() || sizes().size === versions().length}
+						>
+							{generating() ? '…' : 'generate all'}
+						</button>
 					</div>
 				</div>
 			</Show>
-
 		</section>
 	);
 }

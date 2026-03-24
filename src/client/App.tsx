@@ -1,6 +1,7 @@
 import { createSignal, createEffect, on, Show, For, onMount, batch } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
+import { BundleHistory } from './components/BundleHistory';
 import { Waterfall } from './components/Waterfall';
 import { OutputTabs } from './components/OutputTabs';
 import { BadgeGenerator } from './components/BadgeGenerator';
@@ -221,12 +222,14 @@ export function App() {
 									<option value="">—</option>
 								</Show>
 								<For each={discoverData()?.exports ?? []}>
-									{(exp) => {
+									{(exp, i) => {
 										const key = exp.key === 'index' ? '' : exp.key;
-										const label = exp.key === 'index'
-											? discoverData()!.package
-											: `${discoverData()!.package}/${exp.key}`;
-										return <option value={key}>{label}</option>;
+										const label = i() === 0 ? 'default' : exp.key;
+										return (
+											<option value={key} style={i() === 0 ? 'color:var(--color-text-muted)' : ''}>
+												{label}
+											</option>
+										);
 									}}
 								</For>
 							</select>
@@ -283,6 +286,11 @@ export function App() {
 					<BadgeGenerator pkg={firstPkg} />
 				</Show>
 
+				{/* ── Version history ─────────────────────────────────────── */}
+				<BundleHistory
+					pkg={firstPkg()}
+					selectedExport={selectedExport()}
+				/>
 			</div>
 
 		<Footer />
