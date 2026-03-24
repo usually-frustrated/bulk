@@ -244,11 +244,17 @@ export function App() {
 								class={styles.pkgInput}
 								value={pkgInput()}
 								onInput={(e) => setPkgInput(e.currentTarget.value.trim())}
-								placeholder="react, zustand, @reduxjs/toolkit"
+								placeholder="react@18.2.0, zustand, @reduxjs/toolkit"
 								spellcheck={false}
-								onKeyDown={(e) => e.key === 'Enter' && handleMeasure()}
 							/>
 						</div>
+
+						<button
+							class={styles.runBtn}
+							onClick={handleMeasure}
+							disabled={measuring()}
+							aria-label="measure"
+						>&#x25B6;</button>
 
 						<div class={styles.cdnGroup}>
 							<label class={styles.inputLabel}>cdn</label>

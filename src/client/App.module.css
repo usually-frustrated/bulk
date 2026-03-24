@@ -90,6 +90,29 @@
 	flex: 0 0 auto;
 }
 
+.runBtn {
+	flex: 0 0 auto;
+	padding: var(--spacing-input-block) 0.3rem;
+	background: none;
+	border: none;
+	border-bottom: 1px solid var(--color-border);
+	font-size: var(--font-size-input);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	line-height: 1;
+	transition: color 0.15s, border-color 0.15s;
+
+	&:hover:not(:disabled) {
+		color: var(--color-accent);
+		border-bottom-color: var(--color-accent);
+	}
+
+	&:disabled {
+		opacity: 0.35;
+		cursor: default;
+	}
+}
+
 .measureBtn {
 	margin-top: 0.5rem;
 	padding: var(--spacing-button-block) var(--spacing-button-inline);
