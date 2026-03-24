@@ -287,11 +287,6 @@ export function BundleHistory(props: Props) {
 				</div>
 			</Show>
 
-			<Show when={!data() && !loading() && props.pkg.trim()}>
-				<div class={styles.empty}>
-					<p>Enter an export name to see version history for {props.pkg}</p>
-				</div>
-			</Show>
 		</section>
 	);
 }

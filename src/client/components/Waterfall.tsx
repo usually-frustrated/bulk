@@ -110,7 +110,7 @@ export function Waterfall(props: WaterfallProps) {
 										<span class={styles.fname} title={r.url}>
 											{filename(r.url)}
 										</span>
-										<span class={styles.size}>{fmtBytes(r.transferSize)}</span>
+										<span class={styles.size}>{fmtBytes(r.transferSize || r.decodedBodySize)}</span>
 									</div>
 									<div class={styles.track}>
 										<div
