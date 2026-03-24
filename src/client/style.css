@@ -170,20 +170,42 @@ body {
 	font-weight: 400;
 	background-color: var(--color-bg);
 	color: var(--color-text);
-	min-height: 100vh;
+	min-height: 100dvh;
 	display: flex;
-	align-items: flex-start;
+	align-items: center;
 	justify-content: center;
 	overflow-x: hidden;
 	padding: 0 var(--spacing-page-padding);
 }
 
 main {
+	position: relative;
 	width: 100%;
 	max-width: var(--layout-max-width);
 	min-width: min(var(--layout-max-width), 100%);
 	padding: var(--spacing-main-block);
 	text-align: left;
+}
+
+/* Vertical border lines spanning full viewport height */
+main::before,
+main::after {
+	content: '';
+	position: fixed;
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	background: var(--color-border);
+	pointer-events: none;
+	z-index: 0;
+}
+
+main::before {
+	left: max(var(--spacing-page-padding), calc((100vw - var(--layout-max-width)) / 2));
+}
+
+main::after {
+	right: max(var(--spacing-page-padding), calc((100vw - var(--layout-max-width)) / 2));
 }
 
 .hero-section {

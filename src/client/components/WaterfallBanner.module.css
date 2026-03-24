@@ -1,0 +1,7 @@
+.wrap {
+	margin: var(--spacing-section-block);
+}
+
+.wrap > svg {
+	display: block;
+}

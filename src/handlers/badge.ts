@@ -1,9 +1,9 @@
 import { formatSize } from '../utils/size';
-import { generateBadgeSvg } from '../utils/svg';
+import { generateBadgeSvg, type BadgeStats } from '../utils/svg';
 import { buildCacheControl, parsePath, type ParsedPath } from '../utils/pkg';
 import { getProvider, getDefaultProvider, type Provider } from '../providers';
 import { Telemetry } from '../utils/telemetry';
-import { resolveVersion, getMeasuredSize } from '../utils/db';
+import { resolveVersion, getMeasuredSize, getPackageExports, getLatestResourceTimings } from '../utils/db';
 import { DEFAULT_CDN } from '../utils/cdn';
 import type { Confidence } from '../utils/cdn';
 import type { Env } from '../types';
@@ -146,6 +146,7 @@ export async function handleBadgeRequest(request: Request, env: Env, ctx: Execut
 	// ── try browser-measured P50 first (Decision 4 priority order) ──────────
 	let sizeStr: string;
 	let confidence: Confidence;
+	let stats: BadgeStats | undefined;
 
 	// Extract bare package name (strip @version suffix if present, being careful
 	// with scoped packages like @scope/pkg where the @ is at position 0).
@@ -163,12 +164,37 @@ export async function handleBadgeRequest(request: Request, env: Env, ctx: Execut
 			// Not enough browser samples — fall back to HEAD estimate.
 			({ sizeStr, confidence } = await fetchPackageSize(provider, pkg));
 		}
+
+		// Best-effort: enrich badge with export count + timing stats
+		try {
+			const [pkgExports, timings] = await Promise.all([
+				getPackageExports(pkgName, version, env),
+				getLatestResourceTimings(pkgName, version, 'index', DEFAULT_CDN, env),
+			]);
+			const exportCount = pkgExports.length || undefined;
+			let fileCount: number | undefined;
+			let roundTrips: number | undefined;
+			let durationMs: number | undefined;
+			if (timings.length > 0) {
+				fileCount = timings.length;
+				const sortedT = [...timings].sort((a, b) => a.start_time - b.start_time);
+				let trips = 1;
+				for (let i = 1; i < sortedT.length; i++) {
+					if (sortedT[i].start_time - sortedT[i - 1].start_time > 5) trips++;
+				}
+				roundTrips = trips;
+				const t0   = Math.min(...sortedT.map(r => r.start_time));
+				const tMax = Math.max(...sortedT.map(r => r.response_end));
+				durationMs = tMax - t0;
+			}
+			if (exportCount || fileCount) stats = { exportCount, fileCount, roundTrips, durationMs };
+		} catch {}
 	} catch {
 		// Version resolution or db failure — fall back gracefully.
 		({ sizeStr, confidence } = await fetchPackageSize(provider, pkg));
 	}
 
-	const svg = generateBadgeSvg(`${provider.name} size`, sizeStr, confidence);
+	const svg = generateBadgeSvg(provider.name, sizeStr!, confidence!, stats);
 
 	const response = new Response(svg, {
 		headers: {

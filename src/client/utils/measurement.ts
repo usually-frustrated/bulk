@@ -55,7 +55,7 @@ export function getBrowserInfo(): string {
 }
 
 export function getConnectionInfo(): string {
-	const conn = (navigator as Record<string, unknown>).connection as
+	const conn = (navigator as unknown as Record<string, unknown>).connection as
 		| { effectiveType?: string; type?: string }
 		| undefined;
 	return conn?.effectiveType ?? conn?.type ?? 'unknown';

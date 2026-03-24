@@ -33,44 +33,53 @@ function esc(s: string): string {
 }
 
 // ─── 1. COMPACT BADGE ────────────────────────────────────────────────────────
-// Classic two-pill shield.  The right pill reflects the confidence tier:
+// Wide two-pill shield showing size + optional browser timing stats.
 //
-//   established    → green,  clean value                 "170 B"
-//   tentative      → yellow, value + asterisk            "170 B *"
-//   server-estimate→ yellow, tilde-prefixed value        "~170 B"
-//   no-data        → dark,   call-to-action label        "measure →"
+//   established    → green pill
+//   tentative      → yellow pill,  value + asterisk
+//   server-estimate→ yellow pill,  tilde-prefixed value
+//   no-data        → dark pill,    "measure →" CTA
+//
+// Right pill text: "11.4 kB  ·  5 exports  ·  1 file  ·  1 round trip  ·  111 ms"
 //
 // Use: ![](https://bulk.frustrated.dev/jsdelivr/zustand)
 
-export function generateBadgeSvg(label: string, value: string, confidence: Confidence): string {
-	let displayValue: string;
+export interface BadgeStats {
+	exportCount?: number;
+	fileCount?:   number;
+	roundTrips?:  number;
+	durationMs?:  number;
+}
+
+export function generateBadgeSvg(
+	label: string,
+	value: string,
+	confidence: Confidence,
+	stats?: BadgeStats,
+): string {
+	let baseValue: string;
 	let vc: string;
 
 	switch (confidence) {
-		case 'established':
-			displayValue = value;
-			vc = C.green;
-			break;
-		case 'tentative':
-			displayValue = `${value} *`;
-			vc = C.yellow;
-			break;
-		case 'server-estimate':
-			displayValue = `~${value}`;
-			vc = C.yellow;
-			break;
-		case 'no-data':
-			displayValue = 'measure \u2192';
-			vc = C.pill_bg;
-			break;
+		case 'established':    baseValue = value;           vc = C.green;    break;
+		case 'tentative':      baseValue = `${value} *`;   vc = C.yellow;   break;
+		case 'server-estimate':baseValue = `~${value}`;    vc = C.yellow;   break;
+		case 'no-data':        baseValue = 'measure \u2192'; vc = C.pill_bg; break;
 	}
+
+	// Build right-side text from stats parts
+	const parts: string[] = [baseValue];
+	if (stats?.exportCount != null) parts.push(`${stats.exportCount} export${stats.exportCount !== 1 ? 's' : ''}`);
+	if (stats?.fileCount   != null) parts.push(`${stats.fileCount} file${stats.fileCount !== 1 ? 's' : ''}`);
+	if (stats?.roundTrips  != null) parts.push(`${stats.roundTrips} round trip${stats.roundTrips !== 1 ? 's' : ''}`);
+	if (stats?.durationMs  != null) parts.push(`${Math.round(stats.durationMs)} ms`);
+	const displayValue = parts.join('  \u00b7  ');
 
 	const lw = tw(label) + 18;
 	const vw = tw(displayValue) + 18;
-	const W = lw + vw;
+	const W  = lw + vw;
 	const lx = lw / 2;
 	const vx = lw + vw / 2;
-	// For no-data, render the CTA text in accent blue instead of white.
 	const vtextFill = confidence === 'no-data' ? C.accent : '#fff';
 
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(label)}: ${esc(displayValue)}">
@@ -215,41 +224,70 @@ export function generateStandardBanner(d: BannerData): string {
 	// ── Waterfall layout (when per-resource timing data is available) ─────────
 	const resources = d.resources && d.resources.length > 0 ? d.resources : null;
 	if (resources) {
-		const STATS_H = 18; // compact stats text row
-		const ROW_H   = 13; // height of each waterfall row
-		const H = H1 + STATS_H + resources.length * ROW_H + 5;
+		const STATS_H  = 18; // stats text row height
+		const ROW_H    = 13; // height for both round headers and resource rows
 
 		const sorted = [...resources].sort((a, b) => a.startTime - b.startTime);
 		const t0     = sorted[0].startTime;
 		const tMax   = Math.max(...sorted.map((r) => r.responseEnd));
 		const span   = Math.max(1, tMax - t0);
 
-		// Label column | bar track
-		const LABEL_W = 145;
-		const BAR_X   = PAD + LABEL_W;
+		// Group into rounds (gap > 5 ms = new round)
+		interface SvgRound { idx: number; offset: number; items: typeof sorted }
+		const rounds: SvgRound[] = [];
+		let cur: typeof sorted = [sorted[0]];
+		for (let i = 1; i < sorted.length; i++) {
+			if (sorted[i].startTime - sorted[i - 1].startTime > 5) {
+				rounds.push({ idx: rounds.length, offset: cur[0].startTime - t0, items: cur });
+				cur = [];
+			}
+			cur.push(sorted[i]);
+		}
+		rounds.push({ idx: rounds.length, offset: cur[0].startTime - t0, items: cur });
+
+		const totalRows = rounds.reduce((s, rd) => s + 1 + rd.items.length, 0);
+		const H = H1 + STATS_H + totalRows * ROW_H + 5;
+
+		// Layout: label + size col | bar track
+		const LABEL_W = 130;
+		const SIZE_W  = 50;
+		const BAR_X   = PAD + LABEL_W + SIZE_W;
 		const BAR_W   = W - BAR_X - PAD;
 
-		// Assign round-trip colours (new round when gap > 5 ms)
 		const roundColors = [C.accent, C.green, C.yellow, C.red];
-		let currentRound = 0;
-		const resourceRounds: number[] = [0];
-		for (let i = 1; i < sorted.length; i++) {
-			if (sorted[i].startTime - sorted[i - 1].startTime > 5) currentRound++;
-			resourceRounds.push(Math.min(currentRound, roundColors.length - 1));
-		}
 
 		const rowEls: string[] = [];
-		for (let i = 0; i < sorted.length; i++) {
-			const r      = sorted[i];
-			const rowY   = H1 + STATS_H + i * ROW_H;
-			const barL   = ((r.startTime - t0) / span) * BAR_W;
-			const barW   = Math.max(3, ((r.responseEnd - r.startTime) / span) * BAR_W);
-			const color  = roundColors[resourceRounds[i]];
-			const name   = waterfallFilename(r.url);
-			const rowBg  = i % 2 !== 0 ? `<rect x="0" y="${rowY}" width="${W}" height="${ROW_H}" fill="${C.panel}" fill-opacity=".5"/>` : '';
-			rowEls.push(`${rowBg}
-  <text x="${PAD}" y="${rowY + ROW_H - 3}" font-family="${FONT}" font-size="9.5" fill="${C.label}">${esc(name)}</text>
-  <rect x="${(BAR_X + barL).toFixed(1)}" y="${rowY + 2}" width="${barW.toFixed(1)}" height="${ROW_H - 4}" rx="1.5" fill="${color}" fill-opacity=".8"/>`);
+		let ry = H1 + STATS_H;
+
+		for (const round of rounds) {
+			const rc = roundColors[Math.min(round.idx, roundColors.length - 1)];
+			const roundLabel  = `ROUND ${round.idx + 1}`;
+			const offsetLabel = `+${round.offset.toFixed(0)}\u202fms`;
+			// Use tw() (11px Verdana) scaled to 9px
+			const tw9 = (s: string) => Math.ceil(s.length * 5.3);
+			rowEls.push(
+				`<text x="${PAD}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9" fill="${rc}" letter-spacing=".05em">${esc(roundLabel)}</text>` +
+				`<text x="${PAD + tw9(roundLabel) + 6}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9" fill="${C.label}">${esc(offsetLabel)}</text>`,
+			);
+			ry += ROW_H;
+
+			for (let ri = 0; ri < round.items.length; ri++) {
+				const r    = round.items[ri];
+				const barL = ((r.startTime - t0) / span) * BAR_W;
+				const barW = Math.max(3, ((r.responseEnd - r.startTime) / span) * BAR_W);
+				const name = waterfallFilename(r.url, 18);
+				const size = r.transferSize != null ? formatSize(r.transferSize) : '\u2013';
+				const rowBg = ri % 2 === 1
+					? `<rect x="0" y="${ry}" width="${W}" height="${ROW_H}" fill="${C.panel}" fill-opacity=".5"/>`
+					: '';
+				rowEls.push(
+					rowBg +
+					`<text x="${PAD}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9.5" fill="${C.value}">${esc(name)}</text>` +
+					`<text x="${BAR_X - 4}" y="${ry + ROW_H - 3}" text-anchor="end" font-family="${FONT}" font-size="9.5" fill="${C.label}">${esc(size)}</text>` +
+					`<rect x="${(BAR_X + barL).toFixed(1)}" y="${ry + 2}" width="${barW.toFixed(1)}" height="${ROW_H - 4}" rx="1.5" fill="${rc}" fill-opacity=".8"/>`,
+				);
+				ry += ROW_H;
+			}
 		}
 
 		return `${svgHeader(H)}

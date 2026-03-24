@@ -3,12 +3,6 @@
 	margin-top: var(--spacing-section-gap);
 }
 
-.separator {
-	border: none;
-	border-top: 1px solid var(--color-border);
-	margin: 0;
-}
-
 .headingRow {
 	display: flex;
 	align-items: center;

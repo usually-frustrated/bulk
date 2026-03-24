@@ -1,8 +1,7 @@
 import { createSignal, createEffect, on, Show, For, onMount, batch } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
-import { Waterfall } from './components/Waterfall';
-import { OutputTabs } from './components/OutputTabs';
+import { WaterfallBanner } from './components/WaterfallBanner';
 import { BadgeGenerator } from './components/BadgeGenerator';
 import {
 	measurePackages,
@@ -301,10 +300,10 @@ export function App() {
 				</Show>
 				<Show when={!measuring() && resources() !== null && measuredEntries() !== null}>
 					<section classList={{ [styles.results]: true, [styles.resultsDimmed]: isDirty() }}>
-						<Waterfall resources={resources()!} />
-						<OutputTabs
-							entries={measuredEntries()!}
+						<WaterfallBanner
 							resources={resources()!}
+							pkg={measuredEntries()![0]?.pkg ?? firstPkg()}
+							version={measuredEntries()![0]?.version ?? ''}
 							cdn={measuredCdn()}
 						/>
 					</section>
