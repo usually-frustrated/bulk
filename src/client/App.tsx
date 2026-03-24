@@ -1,4 +1,4 @@
-import { createSignal, createEffect, on, Show, For, onCleanup, batch } from 'solid-js';
+import { createSignal, createEffect, on, Show, For, onMount, batch } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LoadingOverlay } from './components/LoadingOverlay';
@@ -56,54 +56,41 @@ export function App() {
 	const initialPkg = getQueryParam('pkg') ?? 'react';
 	const initialExport = getQueryParam('export');
 
+	// pkgInput = live text-field value
+	// pkg      = committed value (only updates when the user clicks check)
+	const [pkgInput, setPkgInput] = createSignal(initialPkg);
 	const [pkg, setPkg] = createSignal(initialPkg);
 	const [cdn, setCdn] = createSignal<CDN>('jsdelivr');
 
+	// Derived: committed package name only (no export suffix)
 	const firstPkg = () => parseInput(pkg()).pkg;
 
-	let urlSyncTimer: number | undefined;
-	createEffect(() => {
-		const pkg = firstPkg();
-		if (urlSyncTimer) window.clearTimeout(urlSyncTimer);
-		urlSyncTimer = window.setTimeout(() => {
-			const params = new URLSearchParams(window.location.search);
-			if (pkg && pkg !== 'react') {
-				params.set('pkg', pkg);
-			} else {
-				params.delete('pkg');
-			}
-			params.delete('export');
-			const qs = params.toString();
-			history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
-		}, 400);
-	});
-	onCleanup(() => {
-		if (urlSyncTimer) window.clearTimeout(urlSyncTimer);
-	});
+	// ── Commit helpers ──────────────────────────────────────────────────────────
 
-	// ── Discovery (suggestions) ────────────────────────────────────────────────
+	/** Commit the current draft input as the active package. */
+	function commitPkg() {
+		setPkg(pkgInput());
+	}
+
+	// ── URL sync (pkg) ──────────────────────────────────────────────────────────
+	// Called explicitly inside handleMeasure — URL only changes on button click.
+
+	function syncPkgParam(p: string) {
+		const params = new URLSearchParams(window.location.search);
+		if (p && p !== 'react') {
+			params.set('pkg', p);
+		} else {
+			params.delete('pkg');
+		}
+		params.delete('export');
+		const qs = params.toString();
+		history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+	}
+
+	// ── Discovery ───────────────────────────────────────────────────────────────
+	// Only populated by handleMeasure — no live/reactive fetching.
 
 	const [discoverData, setDiscoverData] = createSignal<DiscoverResult | null>(null);
-	const [discoverPkg, setDiscoverPkg] = createSignal('');
-
-	let discoverTimer: number | undefined;
-	createEffect(() => {
-		const pkg = firstPkg();
-		if (discoverTimer) window.clearTimeout(discoverTimer);
-		if (!pkg.trim()) return;
-		discoverTimer = window.setTimeout(async () => {
-			try {
-				const res = await fetch(`/_discover/${encodeURIComponent(pkg)}`);
-				if (!res.ok) return;
-				const data = (await res.json()) as DiscoverResult;
-				setDiscoverData(data);
-				setDiscoverPkg(pkg);
-			} catch {}
-		}, 600);
-	});
-	onCleanup(() => {
-		if (discoverTimer) window.clearTimeout(discoverTimer);
-	});
 
 	// ── Measurement state ───────────────────────────────────────────────────────
 
@@ -112,12 +99,39 @@ export function App() {
 	const [resources, setResources] = createSignal<ResourceTimingEntry[] | null>(null);
 	const [measuredEntries, setMeasuredEntries] = createSignal<MeasurementEntry[] | null>(null);
 	const [measuredCdn, setMeasuredCdn] = createSignal<CDN>('jsdelivr');
+	const [measuredInput, setMeasuredInput] = createSignal<string | null>(null);
+	const [measuredExport, setMeasuredExport] = createSignal('');
+
+	// ── Export selection ────────────────────────────────────────────────────────
+
+	const [selectedExport, setSelectedExport] = createSignal(initialExport ?? '');
+
+	// When the committed package changes, reset export + discover data + results.
+	createEffect(on(firstPkg, () => {
+		setSelectedExport('');
+		setDiscoverData(null);
+		setResources(null);
+		setMeasuredEntries(null);
+	}, { defer: true }));
+
+	// ── isDirty ─────────────────────────────────────────────────────────────────
+	// Button is active when input, CDN, or export differs from last measurement.
+
+	const isDirty = () =>
+		measuredInput() === null ||
+		pkgInput() !== measuredInput() ||
+		cdn() !== measuredCdn() ||
+		selectedExport() !== measuredExport();
 
 	// ── Measure handler ─────────────────────────────────────────────────────────
+	// Commits the draft input, then runs browser measurement.
 
 	const handleMeasure = async () => {
-		const pkgName = firstPkg();
+		// Commit the draft input before measuring and sync URL.
+		commitPkg();
+		const pkgName = parseInput(pkgInput()).pkg;
 		if (!pkgName) return;
+		syncPkgParam(pkgName);
 
 		batch(() => {
 			setMeasuring(true);
@@ -127,10 +141,11 @@ export function App() {
 		});
 
 		try {
-			// 1. Resolve version via /_discover
+			// 1. Resolve version + exports via /_discover
 			const res0 = await fetch(`/_discover/${encodeURIComponent(pkgName)}`);
 			if (!res0.ok) throw new Error(`Could not resolve ${pkgName}: ${res0.statusText}`);
 			const dr = (await res0.json()) as DiscoverResult;
+			setDiscoverData(dr);
 
 			// 2. Single measurement entry: package + selected export
 			const exportKey = selectedExport() || 'index';
@@ -161,6 +176,8 @@ export function App() {
 				setResources(rawResources);
 				setMeasuredEntries(entries);
 				setMeasuredCdn(selectedCdn);
+				setMeasuredInput(pkgInput());
+				setMeasuredExport(selectedExport());
 			});
 		} catch (err) {
 			setMeasureError(err instanceof Error ? err.message : 'Measurement failed');
@@ -169,18 +186,13 @@ export function App() {
 		}
 	};
 
-	// ── Export selection for BundleHistory ────────────────────────────────────
-	// Lifted here so chip clicks can drive it directly.
+	// Auto-measure on initial load only when query params are present.
+	onMount(() => { if (getQueryParam('pkg') !== null) void handleMeasure(); });
 
-	const [selectedExport, setSelectedExport] = createSignal(initialExport ?? '');
-
-	// Reset when the package changes (defer so it doesn't fire on mount).
-	createEffect(on(firstPkg, () => setSelectedExport(''), { defer: true }));
-
-	// ── Loading overlay (for BundleHistory) ────────────────────────────────────
+	// ── Loading overlay (for BundleHistory only) ────────────────────────────────
 
 	const [loadingCount, setLoadingCount] = createSignal(0);
-	const loading = () => loadingCount() > 0 || measuring();
+	const loading = () => loadingCount() > 0;
 	const handleLoading = (v: boolean) => setLoadingCount((c) => Math.max(0, c + (v ? 1 : -1)));
 
 	// ── Render ──────────────────────────────────────────────────────────────────
@@ -198,12 +210,34 @@ export function App() {
 							<input
 								type="text"
 								class={styles.pkgInput}
-								value={pkg()}
-								onInput={(e) => setPkg(e.currentTarget.value.trim())}
-								placeholder="react, zustand, @reduxjs/toolkit"
+								value={pkgInput()}
+								onInput={(e) => setPkgInput(e.currentTarget.value.trim())}
+								placeholder="react@18.2.0, zustand, @reduxjs/toolkit"
 								spellcheck={false}
-								onKeyDown={(e) => e.key === 'Enter' && handleMeasure()}
 							/>
+						</div>
+
+						<div class={styles.exportGroup}>
+							<label class={styles.inputLabel}>export</label>
+							<select
+								class={styles.exportSelect}
+								value={selectedExport()}
+								onChange={(e) => setSelectedExport(e.currentTarget.value)}
+								disabled={!discoverData()}
+							>
+								<Show when={!discoverData()}>
+									<option value="">—</option>
+								</Show>
+								<For each={discoverData()?.exports ?? []}>
+									{(exp) => {
+										const key = exp.key === 'index' ? '' : exp.key;
+										const label = exp.key === 'index'
+											? discoverData()!.package
+											: `${discoverData()!.package}/${exp.key}`;
+										return <option value={key}>{label}</option>;
+									}}
+								</For>
+							</select>
 						</div>
 
 						<div class={styles.cdnGroup}>
@@ -218,36 +252,14 @@ export function App() {
 								<option value="unpkg">unpkg</option>
 							</select>
 						</div>
+
+						<button
+							classList={{ [styles.runBtn]: true, [styles.runBtnDirty]: isDirty() }}
+							onClick={handleMeasure}
+							disabled={measuring() || !isDirty()}
+							aria-label="measure"
+						>&#x25B6; check</button>
 					</div>
-
-					<button
-						class={styles.measureBtn}
-						onClick={handleMeasure}
-						disabled={measuring()}
-					>
-						{measuring() ? 'measuring…' : 'measure'}
-					</button>
-
-					{/* Suggestions from /_discover */}
-					<Show when={discoverData() && discoverPkg() === firstPkg()}>
-						<div class={styles.suggestions}>
-							<span class={styles.suggestLabel}>
-								{discoverData()!.package}@{discoverData()!.version} exports:
-							</span>
-							<div class={styles.suggestChips}>
-								<For each={discoverData()!.exports}>
-									{(exp) => (
-										<button
-											class={`${styles.chip}${(exp.key === 'index' ? '' : exp.key) === selectedExport() ? ` ${styles.chipActive}` : ''}`}
-											onClick={() => setSelectedExport(exp.key === 'index' ? '' : exp.key)}
-										>
-											{exp.key === 'index' ? discoverData()!.package : `${discoverData()!.package}/${exp.key}`}
-										</button>
-									)}
-								</For>
-							</div>
-						</div>
-					</Show>
 				</div>
 
 				{/* ── Error ──────────────────────────────────────────────── */}
@@ -256,7 +268,14 @@ export function App() {
 				</Show>
 
 				{/* ── Results: waterfall + output tabs ───────────────────── */}
-				<Show when={resources() !== null && measuredEntries() !== null}>
+				<Show when={measuring()}>
+					<section class={styles.results}>
+						<div class={styles.spinnerWrap}>
+							<span class={styles.spinner} aria-hidden="true">✜</span>
+						</div>
+					</section>
+				</Show>
+				<Show when={!measuring() && resources() !== null && measuredEntries() !== null}>
 					<section class={styles.results}>
 						<Waterfall resources={resources()!} />
 						<OutputTabs
@@ -277,7 +296,7 @@ export function App() {
 					pkg={firstPkg()}
 					onLoading={handleLoading}
 					selectedExport={selectedExport()}
-					onExportChange={setSelectedExport}
+					onExportChange={(k) => setSelectedExport(k)}
 					exports={discoverData()?.exports ?? null}
 				/>
 			</div>

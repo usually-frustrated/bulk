@@ -66,16 +66,6 @@ export function BundleHistory(props: Props) {
 		if (!pkg) return;
 		const exp = props.selectedExport.trim() || 'index';
 
-		// Sync export to URL
-		const params = new URLSearchParams(window.location.search);
-		if (exp && exp !== 'index') {
-			params.set('export', exp);
-		} else {
-			params.delete('export');
-		}
-		const qs = params.toString();
-		history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
-
 		batch(() => {
 			setLoading(true);
 			setError(null);
