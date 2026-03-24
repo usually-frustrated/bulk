@@ -32,10 +32,18 @@ export async function handleDiscoverRequest(
   let pkg = pkgName;
   let version = 'latest';
 
-  if (pkgName.includes('@')) {
-    const parts = pkgName.split('@');
-    pkg = parts.slice(0, -1).join('@');
-    version = parts[parts.length - 1];
+  if (pkgName.startsWith('@')) {
+    // Scoped package: @scope/name or @scope/name@version
+    const atVersion = pkgName.indexOf('@', 1);
+    if (atVersion !== -1) {
+      pkg = pkgName.slice(0, atVersion);
+      version = pkgName.slice(atVersion + 1);
+    }
+  } else if (pkgName.includes('@')) {
+    // Unscoped package: name@version
+    const atVersion = pkgName.indexOf('@');
+    pkg = pkgName.slice(0, atVersion);
+    version = pkgName.slice(atVersion + 1);
   }
 
   try {
