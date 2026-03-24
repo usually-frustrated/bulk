@@ -122,6 +122,20 @@ export function App() {
 		cdn() !== measuredCdn() ||
 		selectedExport() !== measuredExport();
 
+	// inputDirty: pkg text field changed since last commit (exports list is stale)
+	const inputDirty = () => pkgInput() !== pkg();
+
+	// Reset all inputs back to the last measured state.
+	function revertInputs() {
+		if (measuredInput() !== null) {
+			setPkgInput(measuredInput()!);
+			setCdn(measuredCdn());
+			setSelectedExport(measuredExport());
+		} else {
+			setPkgInput(pkg());
+		}
+	}
+
 	// ── Measure handler ─────────────────────────────────────────────────────────
 	// Commits the draft input, then runs browser measurement.
 
@@ -216,7 +230,7 @@ export function App() {
 								class={styles.exportSelect}
 								value={selectedExport()}
 								onChange={(e) => setSelectedExport(e.currentTarget.value)}
-								disabled={!discoverData()}
+								disabled={!discoverData() || inputDirty()}
 							>
 								<Show when={!discoverData()}>
 									<option value="">—</option>
@@ -254,6 +268,9 @@ export function App() {
 							disabled={measuring() || !isDirty()}
 							aria-label="measure"
 						>&#x25B6; check</button>
+						<Show when={isDirty() && measuredInput() !== null}>
+							<button class={styles.revertBtn} onClick={revertInputs} title="revert changes">&#x21A9;</button>
+						</Show>
 					</div>
 				</div>
 
@@ -271,7 +288,7 @@ export function App() {
 					</section>
 				</Show>
 				<Show when={!measuring() && resources() !== null && measuredEntries() !== null}>
-					<section class={styles.results}>
+					<section classList={{ [styles.results]: true, [styles.resultsDimmed]: isDirty() }}>
 						<Waterfall resources={resources()!} />
 						<OutputTabs
 							entries={measuredEntries()!}
@@ -283,14 +300,19 @@ export function App() {
 
 				{/* ── Badge ───────────────────────────────────────────────── */}
 				<Show when={firstPkg()}>
-					<BadgeGenerator pkg={firstPkg} />
+					<div classList={{ [styles.resultsDimmed]: isDirty() }}>
+						<BadgeGenerator pkg={firstPkg} />
+					</div>
 				</Show>
 
 				{/* ── Version history ─────────────────────────────────────── */}
-				<BundleHistory
-					pkg={firstPkg()}
-					selectedExport={selectedExport()}
-				/>
+				<div classList={{ [styles.resultsDimmed]: isDirty() }}>
+					<BundleHistory
+						pkg={firstPkg()}
+						selectedExport={selectedExport()}
+						onVersionClick={(v) => setPkgInput(`${firstPkg()}@${v}`)}
+					/>
+				</div>
 			</div>
 
 		<Footer />

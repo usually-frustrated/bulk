@@ -29,9 +29,10 @@ export function buildImportmapUrl(pkg: string, version: string, exportKey: strin
 				? `https://cdn.jsdelivr.net/npm/${pkg}@${version}/+esm`
 				: `https://cdn.jsdelivr.net/npm/${pkg}@${version}/${exportKey}/+esm`;
 		case 'esm.sh':
+			// ?bundle creates a self-contained file so deps don't load as separate requests
 			return isRoot
-				? `https://esm.sh/${pkg}@${version}`
-				: `https://esm.sh/${pkg}@${version}/${exportKey}`;
+				? `https://esm.sh/${pkg}@${version}?bundle`
+				: `https://esm.sh/${pkg}@${version}/${exportKey}?bundle`;
 		case 'unpkg':
 			return isRoot
 				? `https://unpkg.com/${pkg}@${version}?module`

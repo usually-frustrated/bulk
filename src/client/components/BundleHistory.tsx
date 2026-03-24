@@ -45,6 +45,7 @@ function toY(bytes: number, maxBytes: number): number {
 interface Props {
 	pkg: string;
 	selectedExport: string;
+	onVersionClick?: (version: string) => void;
 }
 
 export function BundleHistory(props: Props) {
@@ -99,6 +100,10 @@ export function BundleHistory(props: Props) {
 		if (pendingDot() || generating()) return;
 		const pkg = props.pkg.trim();
 		const exportKey = props.selectedExport || 'index';
+		// For blank dots (no size yet), update the input to pin this version
+		if (!sizes().has(version)) {
+			props.onVersionClick?.(version);
+		}
 		setPendingDot(version);
 		try {
 			const size = await fetchSizeForVersion(pkg, version, exportKey);

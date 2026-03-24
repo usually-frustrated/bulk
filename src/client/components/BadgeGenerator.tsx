@@ -27,25 +27,30 @@ export function BadgeGenerator(props: Props) {
 
 	return (
 		<section class={styles.badgeGenerator}>
-			<label class={styles.inputLabel}>badge</label>
+			{/* ── Badge ──────────────────────────────────────────────── */}
+			<hr class={styles.separator} />
+			<div class={styles.headingRow}>
+				<label class={styles.inputLabel}>badge</label>
+				<button class={styles.copyButton} onClick={() => copyUrl(badgeUrl())}>
+					{copyUrlText()}
+				</button>
+			</div>
 			<div class={styles.previewRow}>
-				<div class={styles.actions}>
-					<button class={styles.copyButton} onClick={() => copyUrl(badgeUrl())}>
-						{copyUrlText()}
-					</button>
-				</div>
 				<img src={badgeUrl()} alt={`${props.pkg()} size badge`} class={styles.badgeImg} />
 			</div>
 
-			<label class={styles.inputLabel} style="margin-top:0.75rem">banner</label>
+			{/* ── Banner ─────────────────────────────────────────────── */}
+			<hr class={styles.separator} />
+			<div class={styles.headingRow}>
+				<label class={styles.inputLabel}>banner</label>
+				<button class={styles.copyButton} onClick={() => copyBanner(bannerUrl())}>
+					{copyBannerText()}
+				</button>
+			</div>
 			<div class={styles.previewRow}>
-				<div class={styles.actions}>
-					<button class={styles.copyButton} onClick={() => copyBanner(bannerUrl())}>
-						{copyBannerText()}
-					</button>
-				</div>
 				<img src={bannerUrl()} alt={`${props.pkg()} banner`} class={styles.bannerImg} />
 			</div>
+			<hr class={styles.separator} />
 		</section>
 	);
 }

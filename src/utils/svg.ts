@@ -97,9 +97,9 @@ export function generateBadgeSvg(label: string, value: string, confidence: Confi
 }
 
 // ─── 2. STANDARD INFO BANNER ─────────────────────────────────────────────────
-// One-row dark banner: package@version · CDN · size · N exports · ESM/UMD pills
-// Width: 520px  Height: 28px
-// Use: ![](https://bulk.frustrated.dev/banner/zustand)
+// Two-row dark banner with waterfall-style stats
+// Width: 520px  Height: 64px
+// Use: ![](https://bulk.frustrated.dev/_banner/standard/zustand)
 
 export interface BannerData {
 	pkg:         string;
@@ -111,61 +111,99 @@ export interface BannerData {
 	hasUmd:      boolean;
 	isError:     boolean;
 	errorMsg?:   string;
+	// optional waterfall stats
+	fileCount?:  number;
+	roundTrips?: number;
+	durationMs?: number;
 }
 
 export function generateStandardBanner(d: BannerData): string {
-	const W = 520;
-	const H = BANNER_H;
-	const PAD = 10;
+	const W    = 520;
+	const H1   = BANNER_H;      // header row height
+	const H2   = 36;            // stats row height
+	const H    = H1 + H2;
+	const PAD  = 10;
 
-	const sizeStr  = d.isError  ? (d.errorMsg ?? 'error')
-	               : d.bytes === null ? 'measuring…'
-	               : formatSize(d.bytes);
-	const sizeCol  = d.isError  ? C.red
-	               : d.bytes === null ? C.label
-	               : C.green;
+	const sizeStr = d.isError   ? (d.errorMsg ?? 'error')
+	              : d.bytes === null ? 'measuring…'
+	              : formatSize(d.bytes);
+	const sizeCol = d.isError   ? C.red
+	              : d.bytes === null ? C.label
+	              : C.green;
 
-	// Left section: "pkg@version"
-	const pkgLabel = `${esc(d.pkg)}@${esc(d.version)}`;
-	// Pills on the right
+	// ── header pills (CDN, ESM, UMD) ───────────────────────────────────────
 	const pills: Array<{ text: string; color: string }> = [
-		{ text: d.cdn,  color: C.accent },
+		{ text: d.cdn, color: C.accent },
 		...(d.hasEsm ? [{ text: 'ESM', color: C.green }] : []),
 		...(d.hasUmd ? [{ text: 'UMD', color: C.yellow }] : [{ text: 'no UMD', color: C.red }]),
 	];
-
-	// Build pill rects from right edge
 	let pillX = W - PAD;
 	const pillEls: string[] = [];
 	for (const p of [...pills].reverse()) {
 		const pw = tw(p.text) + 12;
 		pillX -= pw + 4;
 		pillEls.unshift(`
-    <rect x="${pillX}" y="6" width="${pw}" height="16" rx="3" fill="${p.color}" fill-opacity=".18" stroke="${p.color}" stroke-width=".5"/>
-    <text x="${pillX + pw / 2}" y="18" text-anchor="middle" font-size="10" fill="${p.color}" font-family="${FONT}">${esc(p.text)}</text>`);
+  <rect x="${pillX}" y="6" width="${pw}" height="16" rx="3" fill="${p.color}" fill-opacity=".18" stroke="${p.color}" stroke-width=".5"/>
+  <text x="${pillX + pw / 2}" y="18" text-anchor="middle" font-size="10" fill="${p.color}" font-family="${FONT}">${esc(p.text)}</text>`);
 	}
-	const pillsEndX = pillX - 8;
 
-	// Center stats
-	const exportsLabel = `${d.exportCount} export${d.exportCount !== 1 ? 's' : ''}`;
-	const statsX = (PAD + 12 + tw(pkgLabel) + 24 + tw(sizeStr)) / 2 + PAD;
+	// ── header left: pkg@version ────────────────────────────────────────────
+	const pkgLabel = `${esc(d.pkg)}`;
+	const verLabel = `@${esc(d.version)}`;
+
+	// ── stats row: size bar + metrics ───────────────────────────────────────
+	const exportsLabel  = `${d.exportCount} export${d.exportCount !== 1 ? 's' : ''}`;
+	const filesLabel    = d.fileCount  != null ? `${d.fileCount} file${d.fileCount !== 1 ? 's' : ''}` : null;
+	const tripsLabel    = d.roundTrips != null ? `${d.roundTrips} round trip${d.roundTrips !== 1 ? 's' : ''}` : null;
+	const durationLabel = d.durationMs != null ? `${d.durationMs.toFixed(0)} ms` : null;
+
+	// Visual size bar (up to 80% of available width)
+	const barMaxW = W - PAD * 2;
+	// Rough reference: 500 kB = full bar
+	const barW = d.bytes != null
+		? Math.min(barMaxW, Math.round((d.bytes / (500 * 1024)) * barMaxW))
+		: 0;
+	const barY = H1 + 10;
+
+	// Stat items inline
+	const statItems: Array<{ label: string; color: string }> = [
+		{ label: sizeStr, color: sizeCol },
+		{ label: exportsLabel, color: C.label },
+		...(filesLabel    ? [{ label: filesLabel,    color: C.label }] : []),
+		...(tripsLabel    ? [{ label: tripsLabel,    color: C.label }] : []),
+		...(durationLabel ? [{ label: durationLabel, color: C.label }] : []),
+	];
+
+	let statX = PAD;
+	const statEls: string[] = [];
+	for (let i = 0; i < statItems.length; i++) {
+		const s = statItems[i];
+		statEls.push(`<text x="${statX}" y="${H1 + 28}" font-family="${FONT}" font-size="10" fill="${s.color}">${esc(s.label)}</text>`);
+		statX += tw(s.label) + 6;
+		if (i < statItems.length - 1) {
+			statEls.push(`<text x="${statX}" y="${H1 + 28}" font-family="${FONT}" font-size="10" fill="${C.border}">·</text>`);
+			statX += tw('·') + 6;
+		}
+	}
 
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(d.pkg)} ${sizeStr}">
   <title>${esc(d.pkg)}@${esc(d.version)} · ${esc(d.cdn)} · ${esc(sizeStr)}</title>
+  <!-- card background -->
   <rect width="${W}" height="${H}" rx="${R}" fill="${C.bg}"/>
   <rect width="${W}" height="${H}" rx="${R}" fill="none" stroke="${C.border}" stroke-width="1"/>
-  <!-- pkg@version -->
-  <text x="${PAD}" y="18" font-family="${FONT}" font-size="11" fill="${C.value}" font-weight="bold">${pkgLabel}</text>
-  <!-- separator -->
-  <text x="${PAD + tw(pkgLabel) + 10}" y="18" font-family="${FONT}" font-size="11" fill="${C.border}">·</text>
-  <!-- size -->
-  <text x="${PAD + tw(pkgLabel) + 22}" y="18" font-family="${FONT}" font-size="11" fill="${sizeCol}">${esc(sizeStr)}</text>
-  <!-- separator -->
-  <text x="${PAD + tw(pkgLabel) + 22 + tw(sizeStr) + 10}" y="18" font-family="${FONT}" font-size="11" fill="${C.border}">·</text>
-  <!-- exports count -->
-  <text x="${PAD + tw(pkgLabel) + 22 + tw(sizeStr) + 22}" y="18" font-family="${FONT}" font-size="11" fill="${C.label}">${esc(exportsLabel)}</text>
+  <!-- header band -->
+  <rect width="${W}" height="${H1}" rx="${R}" fill="${C.panel}"/>
+  <rect y="${H1 - R}" width="${W}" height="${R}" fill="${C.panel}"/>
+  <line x1="0" y1="${H1}" x2="${W}" y2="${H1}" stroke="${C.border}" stroke-width=".5"/>
+  <!-- pkg name (bold) + version (muted) -->
+  <text x="${PAD}" y="19" font-family="${FONT}" font-size="12" fill="${C.value}" font-weight="bold">${pkgLabel}<tspan fill="${C.label}" font-weight="normal">${verLabel}</tspan></text>
   <!-- pills -->
   ${pillEls.join('')}
+  <!-- stats row: size bar -->
+  <rect x="${PAD}" y="${barY}" width="${barMaxW}" height="4" rx="2" fill="${C.border}" fill-opacity=".4"/>
+  <rect x="${PAD}" y="${barY}" width="${barW}" height="4" rx="2" fill="${sizeCol}" fill-opacity=".7"/>
+  <!-- stats row: text metrics -->
+  ${statEls.join('\n  ')}
 </svg>`.trim();
 }
 
