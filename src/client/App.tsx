@@ -227,8 +227,8 @@ export function App() {
 		setMeasuredEntries(null);
 	}, { defer: true }));
 
-	// Auto-measure on initial load.
-	onMount(() => { void handleMeasure(); });
+	// Auto-measure on initial load only when query params are present.
+	onMount(() => { if (getQueryParam('pkg') !== null) void handleMeasure(); });
 
 	// ── Loading overlay (for BundleHistory only) ────────────────────────────────
 

@@ -10,7 +10,7 @@ export async function handleBannerRequest(
 	const path = url.pathname;
 	
 	// Parse path: /_banner/(compact|standard|full)/:pkg[@version][/:export]
-	const match = path.match(/^\/_banner\/(compact|standard|full)\/(.+?)(?:\/([^?]+))?/);
+	const match = path.match(/^\/_banner\/(compact|standard|full)\/(.+)/);
 	if (!match) {
 		return new Response('Invalid banner path', { status: 400 });
 	}
