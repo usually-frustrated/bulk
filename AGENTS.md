@@ -103,8 +103,12 @@ inputDirty = pkgInput !== pkg   ← text field changed since last commit; used t
 - Check button shows a subtle periodic glow animation (`checkGlow` keyframe) while `isDirty()`
 - Revert button (↩) appears next to check when `isDirty() && measuredInput !== null`; resets pkgInput/cdn/selectedExport to last measured values
 
-### Discover flow (CORRECTED — was wrong in previous version of this file)
+### Discover flow
 `/_discover/<pkg>` is called inside `handleMeasure` only — it does NOT fire reactively on every keystroke. Exports are populated only after a successful measurement run.
+
+**Skip re-fetch rule (bug fix):** `handleMeasure` checks `discoverData()?.package === pkgName` before calling `/_discover`. If they match, the existing data is reused and `setDiscoverData` is NOT called. This prevents SolidJS's `<For>` from re-rendering the `<option>` list on every "check" click, which would reset the controlled `<select>` value and lose the user's export selection.
+
+Effect on package change: when `firstPkg()` actually changes (new package typed), the `createEffect(on(firstPkg, ...))` fires, clears `discoverData`, clears `selectedExport`, and on the next measure the discover is re-fetched fresh.
 
 ---
 
@@ -180,11 +184,23 @@ Classic two-pill shield. Width auto-sized to text. Height 20px.
 Confidence → pill color: established=green, tentative=yellow, server-estimate=yellow (~prefix), no-data=dark.
 
 ### generateStandardBanner (standard banner)
-Two-row design. Width 520px, Height 64px.
-- Row 1 (28px, panel bg): `pkg@version` bold + CDN/ESM/UMD pills on right
-- Row 2 (36px, dark bg): proportional size bar + size string · export count · optional files/trips/duration
+Width 520px. Two layout modes selected by whether `BannerData.resources` is populated:
 
-`BannerData` interface accepts optional `fileCount`, `roundTrips`, `durationMs` for the waterfall stats row.
+**Waterfall mode** (when `resources` present):
+- Row 1 (28px, panel bg): `pkg@version` bold + CDN/ESM/UMD pills on right
+- Stats line (18px): size · exports · files · round trips · duration (compact text)
+- Per-resource rows (13px each): filename label (≤22 chars, 145px col) + timed bar (355px track, coloured by round trip)
+- Total height: `28 + 18 + N×13 + 5`
+- Round-trip bar colours: accent-blue (trip 1) → green → yellow → red
+
+**Fallback mode** (no `resources`):
+- Row 1 (28px, panel bg): same header
+- Row 2 (36px, dark bg): proportional size bar (bytes/500kB) + stats text
+- Total height: 64px (fixed)
+
+`BannerData` interface:
+- `resources?: BannerResource[]` — per-resource `{url, startTime, responseEnd, transferSize}`
+- `fileCount?`, `roundTrips?`, `durationMs?` — optional aggregated stats for the stats line
 
 ### generateFullBanner (full banner)
 Multi-row. Width 520px, Height = 28 + N×22px.
@@ -195,8 +211,10 @@ Handler now:
 1. Resolves version via `resolveVersion` (D1 cache 1h, then npm registry)
 2. Fetches export list via `getPackageExports`
 3. Gets size from `getMeasuredSize` (browser P50) → `getCachedSize` (D1) → live `measureSize` (HEAD) in that priority order
-4. Falls back gracefully: partial/null data shows "measuring…" or a placeholder
-5. Returns error banner SVG on exception (never a 5xx, always an SVG)
+4. **Fetches latest resource timings** via `getLatestResourceTimings(pkg, version, 'index', cdn, env)` — queries the most-recent browser measurement session from `resource_timings` table
+5. Derives `fileCount`, `roundTrips`, `durationMs` from the timing rows and passes `resources` array to `generateStandardBanner` — triggers waterfall SVG layout
+6. Falls back gracefully: partial/null data shows "measuring…" or a placeholder
+7. Returns error banner SVG on exception (never a 5xx, always an SVG)
 
 ---
 
@@ -207,8 +225,12 @@ package_exports        (package,version → exports:JSON, fetched_at)
 package_versions       (package,version,published_at)
 package_versions_fetched (package,fetched_at)
 version_resolution     (package,version,fetched_at)
-resource_timings       (pkg,version,export_key,cdn,bytes_transfer,bytes_raw — browser P50 data)
+resource_timings       (package,version,export_key,cdn,browser,connection,
+                         transfer_size,decoded_body_size,start_time,response_end,url,
+                         timestamp DEFAULT datetime('now'))
 ```
+
+**`getLatestResourceTimings(pkg, version, exportKey, cdn, env)`** — queries `resource_timings` for all rows at `MAX(timestamp)` (= latest browser session batch). Returns `ResourceTimingRow[]` with `{url, transfer_size, decoded_body_size, start_time, response_end}`. Used by `banner.ts` to render the waterfall SVG. Sessions share a timestamp because batch INSERTs all land in the same SQLite second.
 
 ---
 
@@ -297,10 +319,13 @@ Test suite is placeholder (tests /message, /random) — does NOT test actual han
 bun run dev          # wrangler dev
 bun run build:client # build-client.ts only
 bun run deploy       # build:client → wrangler deploy
-bun test
+bun test             # vitest (needs @cloudflare/vitest-pool-workers — bun install first)
 bun run cf-typegen   # wrangler types → worker-configuration.d.ts
-npx tsc --noEmit     # type-check (ignore "Cannot find type definition file for 'bun'" — pre-existing)
+bunx tsc --noEmit    # type-check (clean after bun install)
 ```
+
+**Always use `bun` / `bunx` — never `npm`, `npx`, or `node` directly.**
+`bun install` installs all devDeps including `@types/bun`; without it `tsc` errors on missing bun type defs.
 
 ---
 
@@ -330,3 +355,4 @@ npx tsc --noEmit     # type-check (ignore "Cannot find type definition file for 
 - `bundle-history.ts` handler still exists but the UI no longer calls `/_bundle-history/*`; it uses `/_versions/` + per-version `/_bundle/` instead
 - `tsc --noEmit` always emits one pre-existing error: "Cannot find type definition file for 'bun'" — ignore it; it does not block builds
 - `?export=` URL param is no longer synced immediately on chip click (chips were removed); export is now a `<select>` driven by discover data
+- **Export dropdown SolidJS quirk:** `<select value={selectedExport()}>` does NOT re-apply its value when child `<option>` elements are re-rendered by `<For>`. The fix is to skip calling `setDiscoverData(dr)` when data for the same package is already loaded — keeping the `<For>` stable and the select selection intact.
