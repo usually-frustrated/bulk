@@ -134,7 +134,7 @@ function UmdScriptTags(props: { entries: MeasurementEntry[] }) {
 
 	return (
 		<Show when={!umdData.loading} fallback={<p class={styles.loading}>Checking for UMD builds…</p>}>
-			<pre class={styles.code}>{scriptTagLines()}</pre>
+			<pre class={styles.code} lang="html">{scriptTagLines()}</pre>
 			<Show when={(umdData() ?? []).some((d) => !d.umdUrl)}>
 				<ul class={styles.warnings}>
 					<For each={(umdData() ?? []).filter((d) => !d.umdUrl)}>
@@ -201,14 +201,14 @@ export function OutputTabs(props: OutputTabsProps) {
 				<Show when={tab() === 'importmap'}>
 					<div class={styles.codeWrap}>
 						<CopyButton text={importmapText()} />
-						<pre class={styles.code}>{importmapText()}</pre>
+						<pre class={styles.code} lang="json">{importmapText()}</pre>
 					</div>
 				</Show>
 
 				<Show when={tab() === 'imports'}>
 					<div class={styles.codeWrap}>
 						<CopyButton text={importsText()} />
-						<pre class={styles.code}>{importsText()}</pre>
+						<pre class={styles.code} lang="js">{importsText()}</pre>
 					</div>
 				</Show>
 
