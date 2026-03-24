@@ -259,7 +259,7 @@ export function App() {
 								<For each={discoverData()!.exports}>
 									{(exp) => (
 										<button
-											class={styles.chip}
+											class={`${styles.chip}${(exp.key === 'index' ? '' : exp.key) === selectedExport() ? ` ${styles.chipActive}` : ''}`}
 											onClick={() => setSelectedExport(exp.key === 'index' ? '' : exp.key)}
 										>
 											{exp.key === 'index' ? discoverData()!.package : exp.key}

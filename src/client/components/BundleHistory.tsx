@@ -162,40 +162,9 @@ export function BundleHistory(props: Props) {
 
 	// ─── render ─────────────────────────────────────────────────────────────
 
-	// Dropdown options: all exports except package.json, index mapped to ''
-	const exportOptions = () =>
-		(props.exports ?? []).filter((e) => e.key !== 'package.json');
-
 	return (
 		<section class={styles.bundleHistory}>
 			<div class={styles.inputRow}>
-				<Show
-					when={exportOptions().length > 0}
-					fallback={
-						<input
-							type="text"
-							class={styles.inputExport}
-							placeholder="export (default: index)"
-							value={props.selectedExport}
-							onInput={(e) => props.onExportChange(e.currentTarget.value)}
-							onKeyDown={(e) => e.key === 'Enter' && analyze()}
-						/>
-					}
-				>
-					<select
-						class={styles.inputExport}
-						value={props.selectedExport}
-						onChange={(e) => props.onExportChange(e.currentTarget.value)}
-					>
-						<For each={exportOptions()}>
-							{(exp) => (
-								<option value={exp.key === 'index' ? '' : exp.key}>
-									{exp.key === 'index' ? `${props.pkg} (index)` : exp.key}
-								</option>
-							)}
-						</For>
-					</select>
-				</Show>
 				<button class={styles.analyzeBtn} onClick={analyze} disabled={loading()}>
 					{loading() ? '…' : 'analyze'}
 				</button>

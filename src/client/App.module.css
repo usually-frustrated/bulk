@@ -138,12 +138,18 @@
 	font-size: var(--font-size-xs);
 	color: var(--color-text-muted);
 	cursor: pointer;
-	transition: color 0.15s, border-color 0.15s;
+	transition: color 0.15s, border-color 0.15s, background 0.15s;
 
 	&:hover {
 		color: var(--color-accent);
 		border-color: var(--color-accent);
 	}
+}
+
+.chipActive {
+	color: var(--color-accent);
+	border-color: var(--color-accent);
+	background: color-mix(in srgb, var(--color-accent) 10%, transparent);
 }
 
 .error {
