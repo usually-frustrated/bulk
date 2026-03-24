@@ -1,7 +1,6 @@
 import { createSignal, createEffect, on, Show, For, onMount, batch } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
-import { BundleHistory } from './components/BundleHistory';
 import { Waterfall } from './components/Waterfall';
 import { OutputTabs } from './components/OutputTabs';
 import { BadgeGenerator } from './components/BadgeGenerator';
@@ -318,15 +317,7 @@ export function App() {
 					</div>
 				</Show>
 
-				{/* ── Version history ─────────────────────────────────────── */}
-				<div classList={{ [styles.resultsDimmed]: isDirty() }}>
-					<BundleHistory
-						pkg={firstPkg()}
-						selectedExport={selectedExport()}
-						onVersionClick={(v) => setPkgInput(`${firstPkg()}@${v}`)}
-					/>
 				</div>
-			</div>
 
 		<Footer />
 	</main>
