@@ -105,12 +105,16 @@ export function App() {
 
 	const [selectedExport, setSelectedExport] = createSignal(initialExport ?? '');
 
-	// When the committed package changes, reset export + discover data + results.
-	createEffect(on(firstPkg, () => {
-		setSelectedExport('');
-		setDiscoverData(null);
-		setResources(null);
-		setMeasuredEntries(null);
+	// When the committed package actually changes (not just re-committed), reset export + discover data + results.
+	let lastPkg = firstPkg();
+	createEffect(on(firstPkg, (pkgName) => {
+		if (pkgName !== lastPkg) {
+			lastPkg = pkgName;
+			setSelectedExport('');
+			setDiscoverData(null);
+			setResources(null);
+			setMeasuredEntries(null);
+		}
 	}, { defer: true }));
 
 	// ── isDirty ─────────────────────────────────────────────────────────────────
