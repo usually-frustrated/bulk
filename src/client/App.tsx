@@ -258,13 +258,6 @@ export function App() {
 							/>
 						</div>
 
-						<button
-							classList={{ [styles.runBtn]: true, [styles.runBtnDirty]: isDirty() }}
-							onClick={handleMeasure}
-							disabled={measuring() || !isDirty()}
-							aria-label="measure"
-						>&#x25B6;</button>
-
 						<div class={styles.cdnGroup}>
 							<label class={styles.inputLabel}>cdn</label>
 							<select
@@ -277,6 +270,13 @@ export function App() {
 								<option value="unpkg">unpkg</option>
 							</select>
 						</div>
+
+						<button
+							classList={{ [styles.runBtn]: true, [styles.runBtnDirty]: isDirty() }}
+							onClick={handleMeasure}
+							disabled={measuring() || !isDirty()}
+							aria-label="measure"
+						>&#x25B6; check</button>
 					</div>
 
 					{/* Suggestions from /_discover — shown as soon as discover data

@@ -92,34 +92,39 @@
 
 .runBtn {
 	flex: 0 0 auto;
-	padding: var(--spacing-input-block) 0.3rem;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.45rem 1rem;
 	background: none;
-	border: none;
-	border-bottom: 1px solid var(--color-border);
-	font-size: var(--font-size-input);
+	border: 1px solid var(--color-border);
+	border-radius: 3px;
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-base);
 	color: var(--color-text-muted);
 	cursor: pointer;
 	line-height: 1;
-	transition: color 0.15s, border-color 0.15s;
+	transition: color 0.15s, border-color 0.15s, background 0.15s, opacity 0.15s;
 
 	&:hover:not(:disabled) {
 		color: var(--color-accent);
-		border-bottom-color: var(--color-accent);
+		border-color: var(--color-accent);
 	}
 
 	&:disabled {
-		opacity: 0.35;
+		opacity: 0.3;
 		cursor: default;
 	}
 }
 
 .runBtnDirty {
-	color: oklch(62% 0.17 145);
-	border-bottom-color: oklch(62% 0.17 145);
+	color: var(--color-bg);
+	background: var(--color-accent);
+	border-color: var(--color-accent);
 
 	&:hover:not(:disabled) {
-		color: oklch(68% 0.19 145);
-		border-bottom-color: oklch(68% 0.19 145);
+		opacity: 0.85;
+		color: var(--color-bg);
 	}
 }
 
