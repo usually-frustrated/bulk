@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show, For, onCleanup, batch } from 'solid-js';
+import { createSignal, createEffect, on, Show, For, onCleanup, batch } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LoadingOverlay } from './components/LoadingOverlay';
@@ -191,6 +191,14 @@ export function App() {
 		}
 	};
 
+	// ── Export selection for BundleHistory ────────────────────────────────────
+	// Lifted here so chip clicks can drive it directly.
+
+	const [selectedExport, setSelectedExport] = createSignal(initialExport ?? '');
+
+	// Reset when the package changes (defer so it doesn't fire on mount).
+	createEffect(on(firstPkg, () => setSelectedExport(''), { defer: true }));
+
 	// ── Loading overlay (for BundleHistory) ────────────────────────────────────
 
 	const [loadingCount, setLoadingCount] = createSignal(0);
@@ -252,19 +260,7 @@ export function App() {
 									{(exp) => (
 										<button
 											class={styles.chip}
-											onClick={() => {
-												const specifier =
-													exp.key === 'index'
-														? discoverData()!.package
-														: `${discoverData()!.package}/${exp.key}`;
-												const existing = pkgLines()
-													.split('\n')
-													.map((l) => l.trim())
-													.filter(Boolean);
-												if (!existing.includes(specifier)) {
-													setPkgLines([...existing, specifier].join('\n'));
-												}
-											}}
+											onClick={() => setSelectedExport(exp.key === 'index' ? '' : exp.key)}
 										>
 											{exp.key === 'index' ? discoverData()!.package : exp.key}
 										</button>
@@ -301,7 +297,9 @@ export function App() {
 				<BundleHistory
 					pkg={firstPkg()}
 					onLoading={handleLoading}
-					initialExport={initialExport ?? undefined}
+					selectedExport={selectedExport()}
+					onExportChange={setSelectedExport}
+					exports={discoverData()?.exports ?? null}
 				/>
 			</div>
 

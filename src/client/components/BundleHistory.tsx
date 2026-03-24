@@ -1,4 +1,4 @@
-import { batch, createEffect, createSignal, For, onMount, Show } from 'solid-js';
+import { batch, createEffect, createSignal, For, Show } from 'solid-js';
 import styles from './BundleHistory.module.css';
 
 interface VersionData {
@@ -50,21 +50,21 @@ function toY(bytes: number, maxBytes: number): number {
 interface Props {
 	pkg: string;
 	onLoading: (v: boolean) => void;
-	initialExport?: string;
+	selectedExport: string;
+	onExportChange: (k: string) => void;
+	exports: { key: string; path: string }[] | null;
 }
 
 export function BundleHistory(props: Props) {
-	const [exportInput, setExportInput] = createSignal(props.initialExport ?? '');
 	const [data, setData] = createSignal<HistoryData | null>(null);
 	const [loading, setLoading] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
 	const [hoveredIdx, setHoveredIdx] = createSignal<number | null>(null);
-	const [cdn] = createSignal('jsdelivr'); // Default CDN for history view
 
 	async function analyze() {
 		const pkg = props.pkg.trim();
 		if (!pkg) return;
-		const exp = exportInput().trim() || 'index';
+		const exp = props.selectedExport.trim() || 'index';
 
 		// Sync export to URL
 		const params = new URLSearchParams(window.location.search);
@@ -85,9 +85,7 @@ export function BundleHistory(props: Props) {
 		props.onLoading(true);
 
 		try {
-			// Map provider ID (badge system) to bundle CDN ID (bundle system)
-			const bundleCdn = cdn() === 'esmsh' ? 'esm.sh' : cdn();
-			const res = await fetch(`/_bundle-history/${pkg}/${exp}?cdn=${bundleCdn}`);
+			const res = await fetch(`/_bundle-history/${pkg}/${exp}?cdn=jsdelivr`);
 			if (!res.ok) throw new Error(await res.text());
 			setData((await res.json()) as HistoryData);
 		} catch (err) {
@@ -98,27 +96,12 @@ export function BundleHistory(props: Props) {
 		}
 	}
 
-	// Auto-load on mount with default export
-	onMount(() => {
-		if (props.pkg.trim()) {
-			analyze();
-		}
-	});
-
-	// Reset when pkg changes, but preserve initialExport on first load
-	let firstRun = true;
+	// Re-analyze whenever pkg or selected export changes.
 	createEffect(() => {
-		const pkg = props.pkg.trim();
-		if (pkg) {
-			batch(() => {
-				setData(null);
-				setError(null);
-				setHoveredIdx(null);
-				if (!firstRun) setExportInput('index');
-			});
-			firstRun = false;
-			analyze();
-		}
+		const pkg = props.pkg; // tracked
+		const exp = props.selectedExport; // tracked
+		void exp;
+		if (pkg.trim()) void analyze();
 	});
 
 	// ─── chart derivations ──────────────────────────────────────────────────
@@ -179,17 +162,40 @@ export function BundleHistory(props: Props) {
 
 	// ─── render ─────────────────────────────────────────────────────────────
 
+	// Dropdown options: all exports except package.json, index mapped to ''
+	const exportOptions = () =>
+		(props.exports ?? []).filter((e) => e.key !== 'package.json');
+
 	return (
 		<section class={styles.bundleHistory}>
 			<div class={styles.inputRow}>
-				<input
-					type="text"
-					class={styles.inputExport}
-					placeholder="export (default: index)"
-					value={exportInput()}
-					onInput={(e) => setExportInput(e.currentTarget.value)}
-					onKeyDown={(e) => e.key === 'Enter' && analyze()}
-				/>
+				<Show
+					when={exportOptions().length > 0}
+					fallback={
+						<input
+							type="text"
+							class={styles.inputExport}
+							placeholder="export (default: index)"
+							value={props.selectedExport}
+							onInput={(e) => props.onExportChange(e.currentTarget.value)}
+							onKeyDown={(e) => e.key === 'Enter' && analyze()}
+						/>
+					}
+				>
+					<select
+						class={styles.inputExport}
+						value={props.selectedExport}
+						onChange={(e) => props.onExportChange(e.currentTarget.value)}
+					>
+						<For each={exportOptions()}>
+							{(exp) => (
+								<option value={exp.key === 'index' ? '' : exp.key}>
+									{exp.key === 'index' ? `${props.pkg} (index)` : exp.key}
+								</option>
+							)}
+						</For>
+					</select>
+				</Show>
 				<button class={styles.analyzeBtn} onClick={analyze} disabled={loading()}>
 					{loading() ? '…' : 'analyze'}
 				</button>

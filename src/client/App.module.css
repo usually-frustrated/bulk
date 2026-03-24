@@ -1,6 +1,7 @@
 .pkgInputWrap {
 	padding: var(--spacing-section-block);
 	margin-bottom: var(--spacing-section-gap);
+	overflow: hidden;
 }
 
 .inputRow {
