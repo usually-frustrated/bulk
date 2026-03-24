@@ -309,7 +309,9 @@ export function App() {
 				{/* ── Results: waterfall + output tabs ───────────────────── */}
 				<Show when={measuring()}>
 					<section class={styles.results}>
-						<span class={styles.spinner} aria-hidden="true">✜</span>
+						<div class={styles.spinnerWrap}>
+							<span class={styles.spinner} aria-hidden="true">✜</span>
+						</div>
 					</section>
 				</Show>
 				<Show when={!measuring() && resources() !== null && measuredEntries() !== null}>

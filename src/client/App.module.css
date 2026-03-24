@@ -191,11 +191,16 @@
 	padding-top: 0.5rem;
 }
 
+.spinnerWrap {
+	display: flex;
+	justify-content: center;
+	padding: var(--spacing-section-block) 0;
+}
+
 .spinner {
 	font-size: var(--font-size-heading);
 	line-height: 1;
-	display: block;
-	padding: var(--spacing-section-block) 0;
+	display: inline-block;
 	animation: spinDecel 2s linear infinite;
 	will-change: transform;
 }
