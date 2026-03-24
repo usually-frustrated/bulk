@@ -133,6 +133,48 @@
 	}
 }
 
+.pointEmpty {
+	fill: none;
+	stroke: var(--color-border);
+	stroke-width: 1.5;
+	cursor: pointer;
+	transition: stroke 0.15s;
+
+	&:hover {
+		stroke: var(--color-accent);
+	}
+}
+
+.pointPending {
+	fill: none;
+	stroke: var(--color-accent);
+	stroke-width: 1.5;
+	stroke-dasharray: 3 2;
+	cursor: wait;
+}
+
+.generateBtn {
+	padding: var(--spacing-button-block) var(--spacing-button-inline);
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-button);
+	color: var(--color-text-muted);
+	background: none;
+	border: 1px solid var(--color-border);
+	border-radius: 3px;
+	cursor: pointer;
+	transition: color 0.15s, border-color 0.15s;
+
+	&:hover:not(:disabled) {
+		color: var(--color-accent);
+		border-color: var(--color-accent);
+	}
+
+	&:disabled {
+		opacity: 0.35;
+		cursor: default;
+	}
+}
+
 /* ─── tooltip ─────────────────────────────────────────────────────────────── */
 
 .tooltipGroup {

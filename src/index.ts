@@ -2,6 +2,7 @@ import type { Env } from './types';
 import { handleBadgeRequest } from './handlers/badge';
 import { handleBundleRequest } from './handlers/bundle';
 import { handleBundleHistory } from './handlers/bundle-history';
+import { handleVersionsRequest } from './handlers/versions';
 import { handleDiscoverRequest } from './handlers/discover';
 import { handleRecordRequest } from './handlers/measurement';
 import { handleBannerRequest } from './handlers/banner';
@@ -48,6 +49,10 @@ export default {
 		// ── Analysis API ───────────────────────────────────────────────────────
 		if (pathname.startsWith('/_bundle-history/')) {
 			return handleBundleHistory(request, env, ctx);
+		}
+
+		if (pathname.startsWith('/_versions/')) {
+			return handleVersionsRequest(request, env);
 		}
 
 		if (pathname.startsWith('/_bundle/')) {

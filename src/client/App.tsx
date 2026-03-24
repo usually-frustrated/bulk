@@ -1,7 +1,6 @@
 import { createSignal, createEffect, on, Show, For, onMount, batch } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
-import { LoadingOverlay } from './components/LoadingOverlay';
 import { BundleHistory } from './components/BundleHistory';
 import { Waterfall } from './components/Waterfall';
 import { OutputTabs } from './components/OutputTabs';
@@ -123,6 +122,20 @@ export function App() {
 		cdn() !== measuredCdn() ||
 		selectedExport() !== measuredExport();
 
+	// inputDirty: pkg text field changed since last commit (exports list is stale)
+	const inputDirty = () => pkgInput() !== pkg();
+
+	// Reset all inputs back to the last measured state.
+	function revertInputs() {
+		if (measuredInput() !== null) {
+			setPkgInput(measuredInput()!);
+			setCdn(measuredCdn());
+			setSelectedExport(measuredExport());
+		} else {
+			setPkgInput(pkg());
+		}
+	}
+
 	// ── Measure handler ─────────────────────────────────────────────────────────
 	// Commits the draft input, then runs browser measurement.
 
@@ -189,12 +202,6 @@ export function App() {
 	// Auto-measure on initial load only when query params are present.
 	onMount(() => { if (getQueryParam('pkg') !== null) void handleMeasure(); });
 
-	// ── Loading overlay (for BundleHistory only) ────────────────────────────────
-
-	const [loadingCount, setLoadingCount] = createSignal(0);
-	const loading = () => loadingCount() > 0;
-	const handleLoading = (v: boolean) => setLoadingCount((c) => Math.max(0, c + (v ? 1 : -1)));
-
 	// ── Render ──────────────────────────────────────────────────────────────────
 
 	return (
@@ -223,18 +230,20 @@ export function App() {
 								class={styles.exportSelect}
 								value={selectedExport()}
 								onChange={(e) => setSelectedExport(e.currentTarget.value)}
-								disabled={!discoverData()}
+								disabled={!discoverData() || inputDirty()}
 							>
 								<Show when={!discoverData()}>
 									<option value="">—</option>
 								</Show>
 								<For each={discoverData()?.exports ?? []}>
-									{(exp) => {
+									{(exp, i) => {
 										const key = exp.key === 'index' ? '' : exp.key;
-										const label = exp.key === 'index'
-											? discoverData()!.package
-											: `${discoverData()!.package}/${exp.key}`;
-										return <option value={key}>{label}</option>;
+										const label = i() === 0 ? 'default' : exp.key;
+										return (
+											<option value={key} style={i() === 0 ? 'color:var(--color-text-muted)' : ''}>
+												{label}
+											</option>
+										);
 									}}
 								</For>
 							</select>
@@ -259,6 +268,9 @@ export function App() {
 							disabled={measuring() || !isDirty()}
 							aria-label="measure"
 						>&#x25B6; check</button>
+						<Show when={isDirty() && measuredInput() !== null}>
+							<button class={styles.revertBtn} onClick={revertInputs} title="revert changes">&#x21A9;</button>
+						</Show>
 					</div>
 				</div>
 
@@ -276,7 +288,7 @@ export function App() {
 					</section>
 				</Show>
 				<Show when={!measuring() && resources() !== null && measuredEntries() !== null}>
-					<section class={styles.results}>
+					<section classList={{ [styles.results]: true, [styles.resultsDimmed]: isDirty() }}>
 						<Waterfall resources={resources()!} />
 						<OutputTabs
 							entries={measuredEntries()!}
@@ -288,24 +300,22 @@ export function App() {
 
 				{/* ── Badge ───────────────────────────────────────────────── */}
 				<Show when={firstPkg()}>
-					<BadgeGenerator pkg={firstPkg} />
+					<div classList={{ [styles.resultsDimmed]: isDirty() }}>
+						<BadgeGenerator pkg={firstPkg} />
+					</div>
 				</Show>
 
 				{/* ── Version history ─────────────────────────────────────── */}
-				<BundleHistory
-					pkg={firstPkg()}
-					onLoading={handleLoading}
-					selectedExport={selectedExport()}
-					onExportChange={(k) => setSelectedExport(k)}
-					exports={discoverData()?.exports ?? null}
-				/>
+				<div classList={{ [styles.resultsDimmed]: isDirty() }}>
+					<BundleHistory
+						pkg={firstPkg()}
+						selectedExport={selectedExport()}
+						onVersionClick={(v) => setPkgInput(`${firstPkg()}@${v}`)}
+					/>
+				</div>
 			</div>
 
-			<Footer />
-
-			<Show when={loading()}>
-				<LoadingOverlay />
-			</Show>
-		</main>
+		<Footer />
+	</main>
 	);
 }

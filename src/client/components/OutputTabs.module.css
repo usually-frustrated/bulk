@@ -33,7 +33,7 @@
 }
 
 .tabPanel {
-	padding: var(--spacing-compact-block) 0;
+	padding: 0;
 }
 
 .codeWrap {

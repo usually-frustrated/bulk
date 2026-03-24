@@ -76,19 +76,36 @@ function guessGlobal(pkg: string): string {
 }
 
 async function fetchUmdInfo(pkg: string, version: string): Promise<UmdInfo> {
-	const url = `https://data.jsdelivr.com/v1/package/npm/${encodeURIComponent(pkg)}@${encodeURIComponent(version)}/flat`;
+	// Use the same URL format as wildcard.ts (no encodeURIComponent — jsDelivr
+	// expects the raw @scope/name format, not %40scope%2Fname).
+	const url = `https://data.jsdelivr.com/v1/package/npm/${pkg}@${version}/flat`;
 	try {
 		const res = await fetch(url);
 		if (!res.ok) return { pkg, version, umdUrl: null, globalName: null };
 		const data = (await res.json()) as { files?: { name: string }[] };
 		const files = (data.files ?? []).map((f) => f.name.replace(/^\//, ''));
 
-		// Prefer umd/*.production.min.js, then umd/*.min.js, then *.umd.min.js
+		// Non-ESM JS files only (exclude .mjs, .esm.js, .module.js)
+		const isEsm = (f: string) => /\.(mjs|esm\.js|module\.js)$/.test(f);
+
 		const candidates = [
-			files.find((f) => /umd\/.*production\.min\.js$/.test(f)),
-			files.find((f) => /umd\/.*\.min\.js$/.test(f)),
+			// umd/ directory (React 18, React-DOM, etc.)
+			files.find((f) => /umd\/.*production\.min\.js$/.test(f) && !isEsm(f)),
+			files.find((f) => /umd\/.*\.min\.js$/.test(f) && !isEsm(f)),
+			// .umd.min.js / .umd.prod.min.js in filename (Vue, Pinia, etc.)
+			files.find((f) => /\.umd\.prod\.min\.js$/.test(f)),
 			files.find((f) => /\.umd\.min\.js$/.test(f)),
-			files.find((f) => /umd\/.*\.js$/.test(f)),
+			files.find((f) => /\.umd\.js$/.test(f)),
+			// umd/ directory without min
+			files.find((f) => /umd\/.*\.js$/.test(f) && !isEsm(f)),
+			// dist/*.global.prod.js (Vue, etc.)
+			files.find((f) => /dist\/.*\.global\.prod\.js$/.test(f) && !isEsm(f)),
+			// dist/*.production.min.js (React-like)
+			files.find((f) => /dist\/.*\.production\.min\.js$/.test(f) && !isEsm(f)),
+			// dist/*.min.js (jQuery, axios, lodash, etc.)
+			files.find((f) => /dist\/.*\.min\.js$/.test(f) && !isEsm(f)),
+			// root-level *.min.js (lodash, moment)
+			files.find((f) => /^[^/]+\.min\.js$/.test(f) && !isEsm(f)),
 		].filter(Boolean) as string[];
 
 		if (!candidates.length) return { pkg, version, umdUrl: null, globalName: null };

@@ -181,6 +181,7 @@ body {
 main {
 	width: 100%;
 	max-width: var(--layout-max-width);
+	min-width: min(var(--layout-max-width), 100%);
 	padding: var(--spacing-main-block);
 	text-align: left;
 }
