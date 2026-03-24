@@ -53,21 +53,13 @@ function parseInput(input: string): { pkg: string; exportKey: string } {
 export function App() {
 	// ── Inputs ─────────────────────────────────────────────────────────────────
 
-	// One entry per line; seed from ?pkg= and ?export=
 	const initialPkg = getQueryParam('pkg') ?? 'react';
 	const initialExport = getQueryParam('export');
-	const initialLines = initialExport
-		? `${initialPkg}/${initialExport}`
-		: initialPkg;
 
-	const [pkgLines, setPkgLines] = createSignal(initialLines);
+	const [pkg, setPkg] = createSignal(initialPkg);
 	const [cdn, setCdn] = createSignal<CDN>('jsdelivr');
 
-	// Debounce URL sync for pkg
-	const firstPkg = () => {
-		const first = pkgLines().split('\n').find((l) => l.trim());
-		return parseInput(first ?? 'react').pkg;
-	};
+	const firstPkg = () => parseInput(pkg()).pkg;
 
 	let urlSyncTimer: number | undefined;
 	createEffect(() => {
@@ -124,11 +116,8 @@ export function App() {
 	// ── Measure handler ─────────────────────────────────────────────────────────
 
 	const handleMeasure = async () => {
-		const lines = pkgLines()
-			.split('\n')
-			.map((l) => l.trim())
-			.filter(Boolean);
-		if (!lines.length) return;
+		const pkgName = firstPkg();
+		if (!pkgName) return;
 
 		batch(() => {
 			setMeasuring(true);
@@ -138,25 +127,14 @@ export function App() {
 		});
 
 		try {
-			// 1. Resolve version for each unique package via /_discover
-			const uniquePkgs = [...new Set(lines.map((l) => parseInput(l).pkg))];
-			const discoverMap = new Map<string, DiscoverResult>();
+			// 1. Resolve version via /_discover
+			const res0 = await fetch(`/_discover/${encodeURIComponent(pkgName)}`);
+			if (!res0.ok) throw new Error(`Could not resolve ${pkgName}: ${res0.statusText}`);
+			const dr = (await res0.json()) as DiscoverResult;
 
-			await Promise.all(
-				uniquePkgs.map(async (pkg) => {
-					const res = await fetch(`/_discover/${encodeURIComponent(pkg)}`);
-					if (!res.ok) throw new Error(`Could not resolve ${pkg}: ${res.statusText}`);
-					discoverMap.set(pkg, (await res.json()) as DiscoverResult);
-				}),
-			);
-
-			// 2. Build MeasurementEntry list
-			const entries: MeasurementEntry[] = lines.map((line) => {
-				const { pkg, exportKey } = parseInput(line);
-				const dr = discoverMap.get(pkg);
-				if (!dr) throw new Error(`No discovery data for ${pkg}`);
-				return { pkg, version: dr.version, exportKey };
-			});
+			// 2. Single measurement entry: package + selected export
+			const exportKey = selectedExport() || 'index';
+			const entries: MeasurementEntry[] = [{ pkg: pkgName, version: dr.version, exportKey }];
 
 			// 3. Run browser measurement in iframe
 			const selectedCdn = cdn();
@@ -216,14 +194,15 @@ export function App() {
 				<div class={styles.pkgInputWrap}>
 					<div class={styles.inputRow}>
 						<div class={styles.inputGroup}>
-							<label class={styles.inputLabel}>packages / exports (one per line)</label>
-							<textarea
-								class={styles.pkgTextarea}
-								value={pkgLines()}
-								onInput={(e) => setPkgLines(e.currentTarget.value)}
-								placeholder={'react\nreact/jsx-runtime\n@reduxjs/toolkit'}
-								rows={3}
+							<label class={styles.inputLabel}>package</label>
+							<input
+								type="text"
+								class={styles.pkgInput}
+								value={pkg()}
+								onInput={(e) => setPkg(e.currentTarget.value.trim())}
+								placeholder="react, zustand, @reduxjs/toolkit"
 								spellcheck={false}
+								onKeyDown={(e) => e.key === 'Enter' && handleMeasure()}
 							/>
 						</div>
 
@@ -262,7 +241,7 @@ export function App() {
 											class={`${styles.chip}${(exp.key === 'index' ? '' : exp.key) === selectedExport() ? ` ${styles.chipActive}` : ''}`}
 											onClick={() => setSelectedExport(exp.key === 'index' ? '' : exp.key)}
 										>
-											{exp.key === 'index' ? discoverData()!.package : exp.key}
+											{exp.key === 'index' ? discoverData()!.package : `${discoverData()!.package}/${exp.key}`}
 										</button>
 									)}
 								</For>
