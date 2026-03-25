@@ -27,7 +27,7 @@ export function BadgeGenerator(props: Props) {
 
 	return (
 		<section class={styles.badgeGenerator}>
-			{/* ── Badge ──────────────────────────────────────────────── */}
+			{/* Badge */}
 			<div class={styles.headingRow}>
 				<label class={styles.inputLabel}>badge</label>
 				<button class={styles.copyButton} onClick={() => copyUrl(badgeUrl())}>
@@ -38,12 +38,15 @@ export function BadgeGenerator(props: Props) {
 				<img src={badgeUrl()} alt={`${props.pkg()} size badge`} class={styles.badgeImg} />
 			</div>
 
-			{/* ── Banner URL ─────────────────────────────────────────── */}
+			{/* Banner */}
 			<div class={styles.headingRow}>
 				<label class={styles.inputLabel}>banner</label>
 				<button class={styles.copyButton} onClick={() => copyBanner(bannerUrl())}>
 					{copyBannerText()}
 				</button>
+			</div>
+			<div class={styles.previewRow}>
+				<img src={bannerUrl()} alt={`${props.pkg()} banner`} class={styles.bannerImg} />
 			</div>
 		</section>
 	);

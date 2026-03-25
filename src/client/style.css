@@ -172,22 +172,20 @@ body {
 	color: var(--color-text);
 	min-height: 100dvh;
 	display: flex;
-	align-items: flex-start;
+	align-items: center;
 	justify-content: center;
 	overflow-x: hidden;
-	padding: 0 var(--spacing-page-padding);
 }
 
 main {
 	position: relative;
-	width: 100%;
-	max-width: var(--layout-max-width);
-	min-width: min(var(--layout-max-width), 100%);
-	padding: 3rem 1rem 3rem;
+	width: 560px;
+	max-width: calc(100vw - 2rem);
+	padding: 2.5rem 0;
 	text-align: left;
 }
 
-/* Vertical border lines spanning full viewport height */
+/* Vertical border lines — anchored to the content column edges, full viewport height */
 main::before,
 main::after {
 	content: '';
@@ -195,26 +193,25 @@ main::after {
 	top: 0;
 	bottom: 0;
 	width: 1px;
-	background: var(--color-border);
+	background: var(--color-border-light);
 	pointer-events: none;
-	z-index: 0;
 }
 
 main::before {
-	left: max(var(--spacing-page-padding), calc((100vw - var(--layout-max-width)) / 2));
+	left: max(0px, calc((100vw - 560px) / 2));
 }
 
 main::after {
-	right: max(var(--spacing-page-padding), calc((100vw - var(--layout-max-width)) / 2));
+	right: max(0px, calc((100vw - 560px) / 2));
 }
 
 .hero-section {
-	padding: var(--spacing-hero-block);
+	padding: 0;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 600px) {
 	main {
-		max-width: var(--layout-max-width-mobile);
+		padding: 2rem 0;
 	}
 }
 
