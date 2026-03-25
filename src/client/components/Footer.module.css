@@ -1,5 +1,6 @@
 .footer {
 	padding: var(--spacing-footer-block) 0;
+	margin-top: 2rem;
 	font-size: var(--font-size-label);
 	color: var(--color-text-muted);
 	display: flex;

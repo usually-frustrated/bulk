@@ -172,7 +172,7 @@ body {
 	color: var(--color-text);
 	min-height: 100dvh;
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	justify-content: center;
 	overflow-x: hidden;
 	padding: 0 var(--spacing-page-padding);
@@ -183,7 +183,7 @@ main {
 	width: 100%;
 	max-width: var(--layout-max-width);
 	min-width: min(var(--layout-max-width), 100%);
-	padding: var(--spacing-main-block);
+	padding: 3rem 1rem 3rem;
 	text-align: left;
 }
 
