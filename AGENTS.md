@@ -2,6 +2,8 @@
 
 > **CRITICAL — ALL AGENTS MUST FOLLOW THIS RULE:**
 > After every session that changes code, discovers new behaviour, finds a bug, or corrects a wrong statement in this file, you MUST update AGENTS.md before pushing. Add new sections, update stale ones, and correct any inaccuracies. This file is the shared memory of the repo.
+>
+> **This rule applies to AGENTS.md itself:** if this file contains anything that no longer reflects the actual code, update it as part of the same commit. AGENTS.md must always be an accurate representation of what is currently true in the repo.
 
 ---
 
@@ -206,15 +208,30 @@ Width 520px. Two layout modes selected by whether `BannerData.resources` is popu
 Multi-row. Width 520px, Height = 28 + N×22px.
 Header row + one row per export showing key, proportional bar, size.
 
-### banner.ts — real data
-Handler now:
-1. Resolves version via `resolveVersion` (D1 cache 1h, then npm registry)
-2. Fetches export list via `getPackageExports`
-3. Gets size from `getMeasuredSize` (browser P50) → `getCachedSize` (D1) → live `measureSize` (HEAD) in that priority order
+### banner.ts — DB-only, no live measurements
+
+**Architecture principle**: the banner is a *read-only* view of data already stored in D1.
+All measurements and analysis happen in the bulk website (browser iframe → `/_record`, or
+the `/_bundle` endpoint). The banner never performs live CDN requests.
+
+Handler flow:
+1. Resolves version via `resolveVersion` (D1 cache 1h, then npm registry — read-only, no writes)
+2. Fetches export list via `getPackageExports` (D1 cache, read-only)
+3. Gets size **from D1 only**: `getMeasuredSize` (browser P50) → `getCachedSize` (server HEAD stored by `/_bundle`)
+   - If neither has data yet, `bytes` remains `null` → SVG shows "measuring…"
+   - **No live CDN HEAD requests** — the banner never calls `measureSize`
 4. **Fetches latest resource timings** via `getLatestResourceTimings(pkg, version, 'index', cdn, env)` — queries the most-recent browser measurement session from `resource_timings` table
-5. Derives `fileCount`, `roundTrips`, `durationMs` from the timing rows and passes `resources` array to `generateStandardBanner` — triggers waterfall SVG layout
-6. Falls back gracefully: partial/null data shows "measuring…" or a placeholder
+5. Derives `fileCount`, `roundTrips`, `durationMs` from the timing rows and passes `resources` array to `generateStandardBanner` — triggers waterfall SVG layout when data is present
+6. Falls back gracefully: missing size → "measuring…"; missing timings → fallback bar layout
 7. Returns error banner SVG on exception (never a 5xx, always an SVG)
+
+**Data flow summary**:
+```
+User measures on bulk website
+  → browser timing → POST /_record → resource_timings table
+  → /_bundle call  → cdn_sizes table
+Banner reads from those tables → renders SVG
+```
 
 ---
 

@@ -1,7 +1,6 @@
 import type { Env } from '../types';
 import { generateStandardBanner, generateFullBanner, generateBadgeSvg, formatSize } from '../utils/svg';
 import { resolveVersion, getPackageExports, getCachedSize, getMeasuredSize, getLatestResourceTimings } from '../utils/db';
-import { buildCdnUrl, measureSize } from '../utils/cdn';
 import type { CDN } from '../utils/cdn';
 
 export async function handleBannerRequest(
@@ -92,19 +91,7 @@ export async function handleBannerRequest(
 					if (cs) bytes = cs.bytes_transfer ?? cs.bytes_raw ?? null;
 				} catch {}
 			}
-			if (bytes === null) {
-				// Measure live (fire-and-forget save)
-				try {
-					const indexEntry = exports.find(e => e.key === 'index') ?? exports[0];
-					if (indexEntry) {
-						const cdnUrl = buildCdnUrl(pkg, version, indexEntry.key, indexEntry.path, cdn);
-						const result = await measureSize(cdnUrl);
-						bytes = result.bytes_transfer ?? result.bytes_raw ?? null;
-					}
-				} catch {}
-			}
-
-				// Fetch per-resource timings from the latest browser measurement session
+			// Fetch per-resource timings from the latest browser measurement session
 			// so the banner can render a network waterfall.
 			let fileCount: number | undefined;
 			let roundTrips: number | undefined;
