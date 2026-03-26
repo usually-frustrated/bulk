@@ -33,44 +33,62 @@ function esc(s: string): string {
 }
 
 // ─── 1. COMPACT BADGE ────────────────────────────────────────────────────────
-// Classic two-pill shield.  The right pill reflects the confidence tier:
+// Wide two-pill shield showing size + optional browser timing stats.
 //
-//   established    → green,  clean value                 "170 B"
-//   tentative      → yellow, value + asterisk            "170 B *"
-//   server-estimate→ yellow, tilde-prefixed value        "~170 B"
-//   no-data        → dark,   call-to-action label        "measure →"
+//   established    → green pill
+//   tentative      → yellow pill,  value + asterisk
+//   server-estimate→ yellow pill,  tilde-prefixed value
+//   no-data        → dark pill,    "measure →" CTA
+//
+// Right pill text: "11.4 kB  ·  5 exports  ·  1 file  ·  1 round trip  ·  111 ms"
 //
 // Use: ![](https://bulk.frustrated.dev/jsdelivr/zustand)
 
-export function generateBadgeSvg(label: string, value: string, confidence: Confidence): string {
-	let displayValue: string;
+export interface BadgeStats {
+	pkgName?:     string;
+	version?:     string;
+	format?:      string; // e.g. 'ESM', 'UMD', 'CJS', 'IIFE'
+	exportCount?: number;
+	fileCount?:   number;
+	roundTrips?:  number;
+	durationMs?:  number;
+}
+
+export function generateBadgeSvg(
+	label: string,
+	value: string,
+	confidence: Confidence,
+	stats?: BadgeStats,
+): string {
+	let baseValue: string;
 	let vc: string;
 
 	switch (confidence) {
-		case 'established':
-			displayValue = value;
-			vc = C.green;
-			break;
-		case 'tentative':
-			displayValue = `${value} *`;
-			vc = C.yellow;
-			break;
-		case 'server-estimate':
-			displayValue = `~${value}`;
-			vc = C.yellow;
-			break;
-		case 'no-data':
-			displayValue = 'measure \u2192';
-			vc = C.pill_bg;
-			break;
+		case 'established':    baseValue = value;           vc = C.green;    break;
+		case 'tentative':      baseValue = `${value} *`;   vc = C.yellow;   break;
+		case 'server-estimate':baseValue = `~${value}`;    vc = C.yellow;   break;
+		case 'no-data':        baseValue = 'measure \u2192'; vc = C.pill_bg; break;
 	}
+
+	// Build right-side text from stats parts
+	const pkgId = stats?.pkgName
+		? stats.version ? `${stats.pkgName}@${stats.version}` : stats.pkgName
+		: null;
+	const parts: string[] = [];
+	if (pkgId)                       parts.push(pkgId);
+	parts.push(baseValue);
+	if (stats?.exportCount != null) parts.push(`${stats.exportCount} export${stats.exportCount !== 1 ? 's' : ''}`);
+	if (stats?.fileCount   != null) parts.push(`${stats.fileCount} file${stats.fileCount !== 1 ? 's' : ''}`);
+	if (stats?.roundTrips  != null) parts.push(`${stats.roundTrips} round trip${stats.roundTrips !== 1 ? 's' : ''}`);
+	if (stats?.durationMs  != null) parts.push(`${Math.round(stats.durationMs)} ms`);
+	if (stats?.format)               parts.push(stats.format);
+	const displayValue = parts.join('  \u00b7  ');
 
 	const lw = tw(label) + 18;
 	const vw = tw(displayValue) + 18;
-	const W = lw + vw;
+	const W  = lw + vw;
 	const lx = lw / 2;
 	const vx = lw + vw / 2;
-	// For no-data, render the CTA text in accent blue instead of white.
 	const vtextFill = confidence === 'no-data' ? C.accent : '#fff';
 
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(label)}: ${esc(displayValue)}">
@@ -101,6 +119,13 @@ export function generateBadgeSvg(label: string, value: string, confidence: Confi
 // Width: 520px  Height: 64px
 // Use: ![](https://bulk.frustrated.dev/_banner/standard/zustand)
 
+export interface BannerResource {
+	url:          string;
+	startTime:    number;
+	responseEnd:  number;
+	transferSize: number | null;
+}
+
 export interface BannerData {
 	pkg:         string;
 	version:     string;
@@ -115,23 +140,35 @@ export interface BannerData {
 	fileCount?:  number;
 	roundTrips?: number;
 	durationMs?: number;
+	// per-resource timings for waterfall rendering
+	resources?:  BannerResource[];
+}
+
+// Truncate a resource URL to a short filename for waterfall row labels.
+function waterfallFilename(url: string, maxLen = 22): string {
+	try {
+		const u = new URL(url);
+		const parts = u.pathname.split('/').filter(Boolean);
+		const name = parts[parts.length - 1] || u.hostname;
+		return name.length > maxLen ? name.slice(0, maxLen - 1) + '…' : name;
+	} catch {
+		return url.slice(0, maxLen);
+	}
 }
 
 export function generateStandardBanner(d: BannerData): string {
-	const W    = 520;
-	const H1   = BANNER_H;      // header row height
-	const H2   = 36;            // stats row height
-	const H    = H1 + H2;
-	const PAD  = 10;
+	const W   = 520;
+	const H1  = BANNER_H; // header row = 28px
+	const PAD = 10;
 
-	const sizeStr = d.isError   ? (d.errorMsg ?? 'error')
-	              : d.bytes === null ? 'measuring…'
+	const sizeStr = d.isError        ? (d.errorMsg ?? 'error')
+	              : d.bytes === null  ? 'measuring…'
 	              : formatSize(d.bytes);
-	const sizeCol = d.isError   ? C.red
-	              : d.bytes === null ? C.label
+	const sizeCol = d.isError        ? C.red
+	              : d.bytes === null  ? C.label
 	              : C.green;
 
-	// ── header pills (CDN, ESM, UMD) ───────────────────────────────────────
+	// ── header pills (CDN, ESM, UMD) ────────────────────────────────────────
 	const pills: Array<{ text: string; color: string }> = [
 		{ text: d.cdn, color: C.accent },
 		...(d.hasEsm ? [{ text: 'ESM', color: C.green }] : []),
@@ -147,25 +184,15 @@ export function generateStandardBanner(d: BannerData): string {
   <text x="${pillX + pw / 2}" y="18" text-anchor="middle" font-size="10" fill="${p.color}" font-family="${FONT}">${esc(p.text)}</text>`);
 	}
 
-	// ── header left: pkg@version ────────────────────────────────────────────
-	const pkgLabel = `${esc(d.pkg)}`;
+	const pkgLabel = esc(d.pkg);
 	const verLabel = `@${esc(d.version)}`;
 
-	// ── stats row: size bar + metrics ───────────────────────────────────────
+	// ── stat items (shared by both layout paths) ─────────────────────────────
 	const exportsLabel  = `${d.exportCount} export${d.exportCount !== 1 ? 's' : ''}`;
 	const filesLabel    = d.fileCount  != null ? `${d.fileCount} file${d.fileCount !== 1 ? 's' : ''}` : null;
 	const tripsLabel    = d.roundTrips != null ? `${d.roundTrips} round trip${d.roundTrips !== 1 ? 's' : ''}` : null;
 	const durationLabel = d.durationMs != null ? `${d.durationMs.toFixed(0)} ms` : null;
 
-	// Visual size bar (up to 80% of available width)
-	const barMaxW = W - PAD * 2;
-	// Rough reference: 500 kB = full bar
-	const barW = d.bytes != null
-		? Math.min(barMaxW, Math.round((d.bytes / (500 * 1024)) * barMaxW))
-		: 0;
-	const barY = H1 + 10;
-
-	// Stat items inline
 	const statItems: Array<{ label: string; color: string }> = [
 		{ label: sizeStr, color: sizeCol },
 		{ label: exportsLabel, color: C.label },
@@ -174,19 +201,22 @@ export function generateStandardBanner(d: BannerData): string {
 		...(durationLabel ? [{ label: durationLabel, color: C.label }] : []),
 	];
 
-	let statX = PAD;
-	const statEls: string[] = [];
-	for (let i = 0; i < statItems.length; i++) {
-		const s = statItems[i];
-		statEls.push(`<text x="${statX}" y="${H1 + 28}" font-family="${FONT}" font-size="10" fill="${s.color}">${esc(s.label)}</text>`);
-		statX += tw(s.label) + 6;
-		if (i < statItems.length - 1) {
-			statEls.push(`<text x="${statX}" y="${H1 + 28}" font-family="${FONT}" font-size="10" fill="${C.border}">·</text>`);
-			statX += tw('·') + 6;
+	function renderStatLine(y: number): string {
+		let x = PAD;
+		const els: string[] = [];
+		for (let i = 0; i < statItems.length; i++) {
+			const s = statItems[i];
+			els.push(`<text x="${x}" y="${y}" font-family="${FONT}" font-size="10" fill="${s.color}">${esc(s.label)}</text>`);
+			x += tw(s.label) + 6;
+			if (i < statItems.length - 1) {
+				els.push(`<text x="${x}" y="${y}" font-family="${FONT}" font-size="10" fill="${C.border}">·</text>`);
+				x += tw('·') + 6;
+			}
 		}
+		return els.join('\n  ');
 	}
 
-	return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(d.pkg)} ${sizeStr}">
+	const svgHeader = (H: number) => `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(d.pkg)} ${sizeStr}">
   <title>${esc(d.pkg)}@${esc(d.version)} · ${esc(d.cdn)} · ${esc(sizeStr)}</title>
   <!-- card background -->
   <rect width="${W}" height="${H}" rx="${R}" fill="${C.bg}"/>
@@ -195,15 +225,106 @@ export function generateStandardBanner(d: BannerData): string {
   <rect width="${W}" height="${H1}" rx="${R}" fill="${C.panel}"/>
   <rect y="${H1 - R}" width="${W}" height="${R}" fill="${C.panel}"/>
   <line x1="0" y1="${H1}" x2="${W}" y2="${H1}" stroke="${C.border}" stroke-width=".5"/>
-  <!-- pkg name (bold) + version (muted) -->
+  <!-- pkg name + version -->
   <text x="${PAD}" y="19" font-family="${FONT}" font-size="12" fill="${C.value}" font-weight="bold">${pkgLabel}<tspan fill="${C.label}" font-weight="normal">${verLabel}</tspan></text>
   <!-- pills -->
-  ${pillEls.join('')}
+  ${pillEls.join('')}`;
+
+	// ── Waterfall layout (when per-resource timing data is available) ─────────
+	const resources = d.resources && d.resources.length > 0 ? d.resources : null;
+	if (resources) {
+		const STATS_H  = 18; // stats text row height
+		const ROW_H    = 13; // height for both round headers and resource rows
+
+		const sorted = [...resources].sort((a, b) => a.startTime - b.startTime);
+		const t0     = sorted[0].startTime;
+		const tMax   = Math.max(...sorted.map((r) => r.responseEnd));
+		const span   = Math.max(1, tMax - t0);
+
+		// Group into rounds (gap > 5 ms = new round)
+		interface SvgRound { idx: number; offset: number; items: typeof sorted }
+		const rounds: SvgRound[] = [];
+		let cur: typeof sorted = [sorted[0]];
+		for (let i = 1; i < sorted.length; i++) {
+			if (sorted[i].startTime - sorted[i - 1].startTime > 5) {
+				rounds.push({ idx: rounds.length, offset: cur[0].startTime - t0, items: cur });
+				cur = [];
+			}
+			cur.push(sorted[i]);
+		}
+		rounds.push({ idx: rounds.length, offset: cur[0].startTime - t0, items: cur });
+
+		const totalRows = rounds.reduce((s, rd) => s + 1 + rd.items.length, 0);
+		const H = H1 + STATS_H + totalRows * ROW_H + 5;
+
+		// Layout: label + size col | bar track
+		const LABEL_W = 130;
+		const SIZE_W  = 50;
+		const BAR_X   = PAD + LABEL_W + SIZE_W;
+		const BAR_W   = W - BAR_X - PAD;
+
+		const roundColors = [C.accent, C.green, C.yellow, C.red];
+
+		const rowEls: string[] = [];
+		let ry = H1 + STATS_H;
+
+		for (const round of rounds) {
+			const rc = roundColors[Math.min(round.idx, roundColors.length - 1)];
+			const roundLabel  = `ROUND ${round.idx + 1}`;
+			const offsetLabel = `+${round.offset.toFixed(0)}\u202fms`;
+			// Use tw() (11px Verdana) scaled to 9px
+			const tw9 = (s: string) => Math.ceil(s.length * 5.3);
+			rowEls.push(
+				`<text x="${PAD}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9" fill="${rc}" letter-spacing=".05em">${esc(roundLabel)}</text>` +
+				`<text x="${PAD + tw9(roundLabel) + 6}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9" fill="${C.label}">${esc(offsetLabel)}</text>`,
+			);
+			ry += ROW_H;
+
+			for (let ri = 0; ri < round.items.length; ri++) {
+				const r    = round.items[ri];
+				const barL = ((r.startTime - t0) / span) * BAR_W;
+				const barW = Math.max(3, ((r.responseEnd - r.startTime) / span) * BAR_W);
+				const name = waterfallFilename(r.url, 18);
+				const size = r.transferSize != null ? formatSize(r.transferSize) : '\u2013';
+				const rowBg = ri % 2 === 1
+					? `<rect x="0" y="${ry}" width="${W}" height="${ROW_H}" fill="${C.panel}" fill-opacity=".5"/>`
+					: '';
+				rowEls.push(
+					rowBg +
+					`<text x="${PAD}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9.5" fill="${C.value}">${esc(name)}</text>` +
+					`<text x="${BAR_X - 4}" y="${ry + ROW_H - 3}" text-anchor="end" font-family="${FONT}" font-size="9.5" fill="${C.label}">${esc(size)}</text>` +
+					`<rect x="${(BAR_X + barL).toFixed(1)}" y="${ry + 2}" width="${barW.toFixed(1)}" height="${ROW_H - 4}" rx="1.5" fill="${rc}" fill-opacity=".8"/>`,
+				);
+				ry += ROW_H;
+			}
+		}
+
+		return `${svgHeader(H)}
+  <!-- stats line -->
+  ${renderStatLine(H1 + 13)}
+  <line x1="0" y1="${H1 + STATS_H}" x2="${W}" y2="${H1 + STATS_H}" stroke="${C.border}" stroke-width=".5"/>
+  <!-- label / bar divider -->
+  <line x1="${BAR_X}" y1="${H1 + STATS_H}" x2="${BAR_X}" y2="${H}" stroke="${C.border}" stroke-width=".5" stroke-opacity=".4"/>
+  <!-- waterfall rows -->
+  ${rowEls.join('\n  ')}
+</svg>`.trim();
+	}
+
+	// ── Fallback: no resource data → compact bar + stats ─────────────────────
+	const H2 = 36;
+	const H  = H1 + H2;
+	const barMaxW = W - PAD * 2;
+	const barW    = d.bytes != null
+		? Math.min(barMaxW, Math.round((d.bytes / (500 * 1024)) * barMaxW))
+		: 0;
+	const barY = H1 + 10;
+
+	return `${svgHeader(H)}
   <!-- stats row: size bar -->
   <rect x="${PAD}" y="${barY}" width="${barMaxW}" height="4" rx="2" fill="${C.border}" fill-opacity=".4"/>
   <rect x="${PAD}" y="${barY}" width="${barW}" height="4" rx="2" fill="${sizeCol}" fill-opacity=".7"/>
   <!-- stats row: text metrics -->
-  ${statEls.join('\n  ')}
+  ${renderStatLine(H1 + 28)}
 </svg>`.trim();
 }
 

@@ -1,6 +1,6 @@
 import type { Env } from '../types';
 import { generateStandardBanner, generateFullBanner, generateBadgeSvg, formatSize } from '../utils/svg';
-import { resolveVersion, getPackageExports, getCachedSize, getMeasuredSize } from '../utils/db';
+import { resolveVersion, getPackageExports, getCachedSize, getMeasuredSize, getLatestResourceTimings } from '../utils/db';
 import { buildCdnUrl, measureSize } from '../utils/cdn';
 import type { CDN } from '../utils/cdn';
 
@@ -104,6 +104,35 @@ export async function handleBannerRequest(
 				} catch {}
 			}
 
+				// Fetch per-resource timings from the latest browser measurement session
+			// so the banner can render a network waterfall.
+			let fileCount: number | undefined;
+			let roundTrips: number | undefined;
+			let durationMs: number | undefined;
+			let resources: Array<{ url: string; startTime: number; responseEnd: number; transferSize: number | null }> | undefined;
+			try {
+				const timings = await getLatestResourceTimings(pkg, version, 'index', cdn, env);
+				if (timings.length > 0) {
+					resources = timings.map((t) => ({
+						url:          t.url,
+						startTime:    t.start_time,
+						responseEnd:  t.response_end,
+						transferSize: t.transfer_size,
+					}));
+					fileCount = resources.length;
+					// Compute round trips from timing gaps (>5 ms = new round)
+					const sorted = [...resources].sort((a, b) => a.startTime - b.startTime);
+					let trips = 1;
+					for (let i = 1; i < sorted.length; i++) {
+						if (sorted[i].startTime - sorted[i - 1].startTime > 5) trips++;
+					}
+					roundTrips = trips;
+					const t0   = Math.min(...sorted.map((r) => r.startTime));
+					const tMax = Math.max(...sorted.map((r) => r.responseEnd));
+					durationMs = tMax - t0;
+				}
+			} catch {}
+
 			const svg = generateStandardBanner({
 				pkg, version, cdn,
 				bytes,
@@ -111,6 +140,10 @@ export async function handleBannerRequest(
 				hasEsm,
 				hasUmd,
 				isError: false,
+				fileCount,
+				roundTrips,
+				durationMs,
+				resources,
 			});
 			return new Response(svg, {
 				headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=3600' },

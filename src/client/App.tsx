@@ -1,9 +1,7 @@
 import { createSignal, createEffect, on, Show, For, onMount, batch } from 'solid-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
-import { BundleHistory } from './components/BundleHistory';
-import { Waterfall } from './components/Waterfall';
-import { OutputTabs } from './components/OutputTabs';
+import { WaterfallBanner } from './components/WaterfallBanner';
 import { BadgeGenerator } from './components/BadgeGenerator';
 import {
 	measurePackages,
@@ -18,11 +16,19 @@ import styles from './App.module.css';
 
 type CDN = 'jsdelivr' | 'esm.sh' | 'unpkg';
 
+interface DetectedFormats {
+	umd:      string | null;
+	cjs:      string | null;
+	systemjs: string | null;
+	iife:     string | null;
+}
+
 interface DiscoverResult {
-	package: string;
-	version: string;
-	exports: { key: string; path: string }[];
+	package:          string;
+	version:          string;
+	exports:          { key: string; path: string }[];
 	wildcardResolved: boolean;
+	formats:          DetectedFormats;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -60,6 +66,7 @@ export function App() {
 	const [pkgInput, setPkgInput] = createSignal(initialPkg);
 	const [pkg, setPkg] = createSignal(initialPkg);
 	const [cdn, setCdn] = createSignal<CDN>('jsdelivr');
+	const [format, setFormat] = createSignal('esm');
 
 	// Derived: committed package name only (no export suffix)
 	const firstPkg = () => parseInput(pkg()).pkg;
@@ -100,6 +107,7 @@ export function App() {
 	const [measuredCdn, setMeasuredCdn] = createSignal<CDN>('jsdelivr');
 	const [measuredInput, setMeasuredInput] = createSignal<string | null>(null);
 	const [measuredExport, setMeasuredExport] = createSignal('');
+	const [measuredFormat, setMeasuredFormat] = createSignal('esm');
 
 	// ── Export selection ────────────────────────────────────────────────────────
 
@@ -111,6 +119,7 @@ export function App() {
 		if (pkgName !== lastPkg) {
 			lastPkg = pkgName;
 			setSelectedExport('');
+			setFormat('esm');
 			setDiscoverData(null);
 			setResources(null);
 			setMeasuredEntries(null);
@@ -124,7 +133,8 @@ export function App() {
 		measuredInput() === null ||
 		pkgInput() !== measuredInput() ||
 		cdn() !== measuredCdn() ||
-		selectedExport() !== measuredExport();
+		selectedExport() !== measuredExport() ||
+		format() !== measuredFormat();
 
 	// inputDirty: pkg text field changed since last commit (exports list is stale)
 	const inputDirty = () => pkgInput() !== pkg();
@@ -135,6 +145,7 @@ export function App() {
 			setPkgInput(measuredInput()!);
 			setCdn(measuredCdn());
 			setSelectedExport(measuredExport());
+			setFormat(measuredFormat());
 		} else {
 			setPkgInput(pkg());
 		}
@@ -158,11 +169,20 @@ export function App() {
 		});
 
 		try {
-			// 1. Resolve version + exports via /_discover
-			const res0 = await fetch(`/_discover/${encodeURIComponent(pkgName)}`);
-			if (!res0.ok) throw new Error(`Could not resolve ${pkgName}: ${res0.statusText}`);
-			const dr = (await res0.json()) as DiscoverResult;
-			setDiscoverData(dr);
+			// 1. Resolve version + exports via /_discover.
+			// Skip re-fetch if we already have data for the same package — this
+			// prevents the <For>-rendered options from re-rendering and losing the
+			// controlled <select> value.
+			const existing = discoverData();
+			let dr: DiscoverResult;
+			if (existing?.package === pkgName) {
+				dr = existing;
+			} else {
+				const res0 = await fetch(`/_discover/${encodeURIComponent(pkgName)}`);
+				if (!res0.ok) throw new Error(`Could not resolve ${pkgName}: ${res0.statusText}`);
+				dr = (await res0.json()) as DiscoverResult;
+				setDiscoverData(dr);
+			}
 
 			// 2. Single measurement entry: package + selected export
 			const exportKey = selectedExport() || 'index';
@@ -170,7 +190,12 @@ export function App() {
 
 			// 3. Run browser measurement in iframe
 			const selectedCdn = cdn();
-			const rawResources = await measurePackages(entries, selectedCdn);
+			const selectedFormat = format();
+			const formats = dr.formats ?? {};
+			const formatPath = selectedFormat !== 'esm'
+				? (formats as Record<string, string | null>)[selectedFormat] ?? null
+				: null;
+			const rawResources = await measurePackages(entries, selectedCdn, selectedFormat, formatPath);
 
 			// 4. Report to /_record (fire-and-forget)
 			const annotated = rawResources.filter(
@@ -193,6 +218,7 @@ export function App() {
 				setResources(rawResources);
 				setMeasuredEntries(entries);
 				setMeasuredCdn(selectedCdn);
+				setMeasuredFormat(selectedFormat);
 				setMeasuredInput(pkgInput());
 				setMeasuredExport(selectedExport());
 			});
@@ -203,6 +229,22 @@ export function App() {
 		}
 	};
 
+	// ── Banner copy ────────────────────────────────────────────────────────────
+	const [copyBannerText, setCopyBannerText] = createSignal('copy url');
+	const copyBannerUrl = async () => {
+		const pkg = firstPkg() || 'zustand';
+		const ver = measuredEntries()?.[0]?.version;
+		const cdn = measuredCdn();
+		const pkgAt = ver ? `${pkg}@${ver}` : pkg;
+		const cdnParam = cdn && cdn !== 'jsdelivr' ? `?cdn=${encodeURIComponent(cdn)}` : '';
+		const url = `${window.location.origin}/_banner/standard/${pkgAt}${cdnParam}`;
+		try {
+			await navigator.clipboard.writeText(url);
+			setCopyBannerText('copied!');
+			setTimeout(() => setCopyBannerText('copy url'), 2000);
+		} catch {}
+	};
+
 	// Auto-measure on initial load only when query params are present.
 	onMount(() => { if (getQueryParam('pkg') !== null) void handleMeasure(); });
 
@@ -210,6 +252,7 @@ export function App() {
 
 	return (
 		<main>
+			<div class={`bleed-top bleed-bottom ${styles.frameWrap}`}>
 			<div class="hero-section">
 				<Header />
 
@@ -266,15 +309,34 @@ export function App() {
 							</select>
 						</div>
 
+						<div class={styles.cdnGroup}>
+							<label class={styles.inputLabel}>format</label>
+							<select
+								class={styles.cdnSelect}
+								value={format()}
+								onChange={(e) => setFormat(e.currentTarget.value)}
+								disabled={inputDirty()}
+							>
+								<option value="esm">ESM</option>
+								<option value="umd"      disabled={!discoverData()?.formats?.umd}>UMD</option>
+								<option value="cjs"      disabled={!discoverData()?.formats?.cjs}>CJS</option>
+								<option value="iife"     disabled={!discoverData()?.formats?.iife}>IIFE</option>
+								<option value="systemjs" disabled={!discoverData()?.formats?.systemjs}>SystemJS</option>
+							</select>
+						</div>
+
 						<button
 							classList={{ [styles.runBtn]: true, [styles.runBtnDirty]: isDirty() }}
 							onClick={handleMeasure}
 							disabled={measuring() || !isDirty()}
 							aria-label="measure"
 						>&#x25B6; check</button>
-						<Show when={isDirty() && measuredInput() !== null}>
-							<button class={styles.revertBtn} onClick={revertInputs} title="revert changes">&#x21A9;</button>
-						</Show>
+						<button
+							class={styles.revertBtn}
+							onClick={revertInputs}
+							title="revert changes"
+							disabled={!isDirty() || measuredInput() === null}
+						>&#x21A9;</button>
 					</div>
 				</div>
 
@@ -293,11 +355,16 @@ export function App() {
 				</Show>
 				<Show when={!measuring() && resources() !== null && measuredEntries() !== null}>
 					<section classList={{ [styles.results]: true, [styles.resultsDimmed]: isDirty() }}>
-						<Waterfall resources={resources()!} />
-						<OutputTabs
-							entries={measuredEntries()!}
+						<div class={styles.headingRow}>
+							<label class={styles.inputLabel}>banner</label>
+							<button class={styles.copyButton} onClick={copyBannerUrl}>{copyBannerText()}</button>
+						</div>
+						<WaterfallBanner
 							resources={resources()!}
+							pkg={measuredEntries()![0]?.pkg ?? firstPkg()}
+							version={measuredEntries()![0]?.version ?? ''}
 							cdn={measuredCdn()}
+							format={measuredFormat()}
 						/>
 					</section>
 				</Show>
@@ -305,21 +372,19 @@ export function App() {
 				{/* ── Badge ───────────────────────────────────────────────── */}
 				<Show when={firstPkg()}>
 					<div classList={{ [styles.resultsDimmed]: isDirty() }}>
-						<BadgeGenerator pkg={firstPkg} />
+						<BadgeGenerator
+							pkg={firstPkg}
+							version={() => measuredEntries()?.[0]?.version ?? ''}
+							cdn={() => measuredCdn()}
+							format={() => measuredFormat()}
+						/>
 					</div>
 				</Show>
 
-				{/* ── Version history ─────────────────────────────────────── */}
-				<div classList={{ [styles.resultsDimmed]: isDirty() }}>
-					<BundleHistory
-						pkg={firstPkg()}
-						selectedExport={selectedExport()}
-						onVersionClick={(v) => setPkgInput(`${firstPkg()}@${v}`)}
-					/>
 				</div>
-			</div>
 
-		<Footer />
-	</main>
+			<Footer />
+			</div>
+		</main>
 	);
 }

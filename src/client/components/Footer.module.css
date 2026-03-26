@@ -1,23 +1,12 @@
 .footer {
-	padding: var(--spacing-footer-block) 0;
+	padding: var(--spacing-footer-block) 0 0;
+	margin-top: 2rem;
 	font-size: var(--font-size-label);
 	color: var(--color-text-muted);
 	display: flex;
 	flex-direction: column;
 	gap: var(--spacing-section-gap);
 	align-items: flex-start;
-	position: relative;
-
-	&::before {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 50%;
-		transform: translateX(-50%);
-		width: 100vw;
-		height: 1px;
-		background: var(--color-border-light);
-	}
 }
 
 .api {

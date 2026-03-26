@@ -20,7 +20,7 @@
 .tagline {
 	font-size: var(--font-size-tagline);
 	color: var(--color-text-muted);
-	margin-bottom: var(--spacing-tagline-bottom);
+	margin-bottom: 2rem;
 	text-transform: none;
 	letter-spacing: 0;
 }
