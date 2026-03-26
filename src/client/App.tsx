@@ -229,6 +229,17 @@ export function App() {
 		}
 	};
 
+	// ── Banner copy ────────────────────────────────────────────────────────────
+	const [copyBannerText, setCopyBannerText] = createSignal('copy url');
+	const copyBannerUrl = async () => {
+		const url = `${window.location.origin}/_banner/standard/${firstPkg() || 'zustand'}`;
+		try {
+			await navigator.clipboard.writeText(url);
+			setCopyBannerText('copied!');
+			setTimeout(() => setCopyBannerText('copy url'), 2000);
+		} catch {}
+	};
+
 	// Auto-measure on initial load only when query params are present.
 	onMount(() => { if (getQueryParam('pkg') !== null) void handleMeasure(); });
 
@@ -339,6 +350,10 @@ export function App() {
 				</Show>
 				<Show when={!measuring() && resources() !== null && measuredEntries() !== null}>
 					<section classList={{ [styles.results]: true, [styles.resultsDimmed]: isDirty() }}>
+						<div class={styles.headingRow}>
+							<label class={styles.inputLabel}>banner</label>
+							<button class={styles.copyButton} onClick={copyBannerUrl}>{copyBannerText()}</button>
+						</div>
 						<WaterfallBanner
 							resources={resources()!}
 							pkg={measuredEntries()![0]?.pkg ?? firstPkg()}

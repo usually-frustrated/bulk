@@ -243,6 +243,37 @@
 	margin: 0.75rem 0 1rem;
 }
 
+/* Banner / badge heading row: label on left, copy button on right */
+.headingRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--spacing-row-gap);
+	padding: 0.4rem 0;
+}
+
+.copyButton {
+	padding: var(--spacing-button-block) var(--spacing-button-inline);
+	font-family: 'Cascadia Code', monospace;
+	font-size: var(--font-size-button);
+	color: var(--color-text-muted);
+	background: transparent;
+	border: 1px solid var(--color-border);
+	border-radius: 4px;
+	cursor: pointer;
+	transition: all 0.15s;
+	white-space: nowrap;
+
+	&:hover {
+		color: var(--color-accent);
+		border-color: var(--color-accent);
+	}
+
+	&:active {
+		background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+	}
+}
+
 .spinnerWrap {
 	display: flex;
 	justify-content: center;

@@ -10,23 +10,59 @@ interface Props {
 	format:    string; // 'esm' | 'umd' | 'cjs' | 'iife' | 'systemjs'
 }
 
-// ─── Design tokens (GitHub dark card) ────────────────────────────────────────
+// ─── Design tokens ────────────────────────────────────────────────────────────
+// Adaptive colors are CSS variables defined in the SVG <style> block below.
+// Accent / round colors stay fixed — they work on both light and dark.
 
 const FONT = "'Cascadia Code',monospace";
 
-const C = {
-	bg:     '#0d1117',
-	panel:  '#161b22',
-	border: '#30363d',
-	label:  '#8b949e',
-	value:  '#e6edf3',
-	accent: '#58a6ff',
-	green:  '#3fb950',
-	yellow: '#d29922',
-	red:    '#f85149',
+// Fixed accent palette (same in light + dark)
+const A = {
+	accent:  '#58a6ff',
+	green:   '#3fb950',
+	yellow:  '#d29922',
+	red:     '#f85149',
 } as const;
 
-const ROUND_COLORS = ['#58a6ff', '#3fb950', '#d29922', '#f85149'] as const;
+const ROUND_COLORS = [A.accent, A.green, A.yellow, A.red] as const;
+
+// CSS variables — resolved at render time by the SVG <style> block.
+// Dark defaults; light-mode overrides via @media (prefers-color-scheme: light).
+const cv = {
+	bg:     'var(--wb-bg)',
+	panel:  'var(--wb-panel)',
+	border: 'var(--wb-border)',
+	label:  'var(--wb-label)',
+	value:  'var(--wb-value)',
+} as const;
+
+// Injected into every SVG — defines --wb-* vars with dark defaults + light override.
+const SVG_STYLE = `<style>
+  svg {
+    --wb-bg:     #0d1117;
+    --wb-panel:  #161b22;
+    --wb-border: #30363d;
+    --wb-label:  #8b949e;
+    --wb-value:  #e6edf3;
+  }
+  @media (prefers-color-scheme: light) {
+    svg {
+      --wb-bg:     #ffffff;
+      --wb-panel:  #f6f8fa;
+      --wb-border: #d0d7de;
+      --wb-label:  #57606a;
+      --wb-value:  #24292f;
+    }
+  }
+</style>`;
+
+const FORMAT_COLOR: Record<string, string> = {
+	esm:      A.green,
+	umd:      A.yellow,
+	cjs:      '#8b949e',
+	iife:     '#e3b341',
+	systemjs: A.accent,
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,14 +97,6 @@ function cw(s: string, fs = 10) {
 }
 
 // ─── SVG builder ─────────────────────────────────────────────────────────────
-
-const FORMAT_COLOR: Record<string, string> = {
-	esm:      '#3fb950', // green
-	umd:      '#d29922', // yellow
-	cjs:      '#8b949e', // muted
-	iife:     '#e3b341', // warm yellow
-	systemjs: '#58a6ff', // blue
-};
 
 function buildSvg(
 	rs: ResourceTimingEntry[],
@@ -108,7 +136,6 @@ function buildSvg(
 	const totalParsed = rs.reduce((s, r) => s + (r.decodedBodySize ?? 0), 0);
 
 	// ── Layout ───────────────────────────────────────────────────────────────
-	// Label col (filename) + size col | bar track
 	const LABEL_W = 145;
 	const SIZE_W  = 52;
 	const BAR_X   = PAD + LABEL_W + SIZE_W;
@@ -119,9 +146,9 @@ function buildSvg(
 
 	// ── Header pills (CDN, format) ────────────────────────────────────────
 	const fmtLabel = format.toUpperCase();
-	const fmtColor = FORMAT_COLOR[format.toLowerCase()] ?? C.label;
+	const fmtColor = FORMAT_COLOR[format.toLowerCase()] ?? cv.label;
 	const pills = [
-		{ text: cdn,      color: C.accent },
+		{ text: cdn,      color: A.accent },
 		{ text: fmtLabel, color: fmtColor  },
 	];
 	let pillX = W - PAD;
@@ -147,12 +174,12 @@ function buildSvg(
 	const statEls: string[] = [];
 	for (let i = 0; i < statItems.length; i++) {
 		statEls.push(
-			`<text x="${sx}" y="${H1 + 13}" font-family="${FONT}" font-size="10" fill="${C.label}">${esc(statItems[i])}</text>`,
+			`<text x="${sx}" y="${H1 + 13}" font-family="${FONT}" font-size="10" fill="${cv.label}">${esc(statItems[i])}</text>`,
 		);
 		sx += cw(statItems[i]) + 5;
 		if (i < statItems.length - 1) {
 			statEls.push(
-				`<text x="${sx}" y="${H1 + 13}" font-family="${FONT}" font-size="10" fill="${C.border}">·</text>`,
+				`<text x="${sx}" y="${H1 + 13}" font-family="${FONT}" font-size="10" fill="${cv.border}">·</text>`,
 			);
 			sx += cw('·') + 5;
 		}
@@ -168,7 +195,7 @@ function buildSvg(
 		const offsetLabel = `+${fmtMs(round.offset)}`;
 		rowEls.push(
 			`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" fill="${rc}" letter-spacing=".05em">${esc(roundLabel)}</text>` +
-			`<text x="${PAD + cw(roundLabel, 9) + 6}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" fill="${C.label}">${esc(offsetLabel)}</text>`,
+			`<text x="${PAD + cw(roundLabel, 9) + 6}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" fill="${cv.label}">${esc(offsetLabel)}</text>`,
 		);
 		ry += RH;
 
@@ -179,12 +206,12 @@ function buildSvg(
 			const name = shortName(r.url);
 			const size = fmtBytes(r.transferSize ?? r.decodedBodySize);
 			const altBg = ri % 2 === 1
-				? `<rect x="0" y="${ry}" width="${W}" height="${RH}" fill="${C.panel}" fill-opacity=".4"/>`
+				? `<rect x="0" y="${ry}" width="${W}" height="${RH}" fill="${cv.panel}" fill-opacity=".4"/>`
 				: '';
 			rowEls.push(
 				altBg +
-				`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9.5" fill="${C.value}">${esc(name)}</text>` +
-				`<text x="${BAR_X - 4}" y="${ry + RH - 3}" text-anchor="end" font-family="${FONT}" font-size="9.5" fill="${C.label}">${esc(size)}</text>` +
+				`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9.5" fill="${cv.value}">${esc(name)}</text>` +
+				`<text x="${BAR_X - 4}" y="${ry + RH - 3}" text-anchor="end" font-family="${FONT}" font-size="9.5" fill="${cv.label}">${esc(size)}</text>` +
 				`<rect x="${(BAR_X + barL).toFixed(1)}" y="${ry + 3}" width="${barW.toFixed(1)}" height="${RH - 6}" rx="1.5" fill="${rc}" fill-opacity=".8"/>`,
 			);
 			ry += RH;
@@ -193,16 +220,17 @@ function buildSvg(
 
 	return [
 		`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="max-width:100%;height:auto">`,
-		`<rect width="${W}" height="${H}" rx="${R}" fill="${C.bg}"/>`,
-		`<rect width="${W}" height="${H}" rx="${R}" fill="none" stroke="${C.border}" stroke-width="1"/>`,
-		`<rect width="${W}" height="${H1}" rx="${R}" fill="${C.panel}"/>`,
-		`<rect y="${H1 - R}" width="${W}" height="${R}" fill="${C.panel}"/>`,
-		`<line x1="0" y1="${H1}" x2="${W}" y2="${H1}" stroke="${C.border}" stroke-width=".5"/>`,
-		`<text x="${PAD}" y="19" font-family="${FONT}" font-size="12" fill="${C.value}" font-weight="bold">${esc(pkg)}<tspan fill="${C.label}" font-weight="normal">@${esc(version)}</tspan></text>`,
+		SVG_STYLE,
+		`<rect width="${W}" height="${H}" rx="${R}" fill="${cv.bg}"/>`,
+		`<rect width="${W}" height="${H}" rx="${R}" fill="none" stroke="${cv.border}" stroke-width="1"/>`,
+		`<rect width="${W}" height="${H1}" rx="${R}" fill="${cv.panel}"/>`,
+		`<rect y="${H1 - R}" width="${W}" height="${R}" fill="${cv.panel}"/>`,
+		`<line x1="0" y1="${H1}" x2="${W}" y2="${H1}" stroke="${cv.border}" stroke-width=".5"/>`,
+		`<text x="${PAD}" y="19" font-family="${FONT}" font-size="12" fill="${cv.value}" font-weight="bold">${esc(pkg)}<tspan fill="${cv.label}" font-weight="normal">@${esc(version)}</tspan></text>`,
 		...pillEls,
 		...statEls,
-		`<line x1="0" y1="${H1 + SH}" x2="${W}" y2="${H1 + SH}" stroke="${C.border}" stroke-width=".5"/>`,
-		`<line x1="${BAR_X}" y1="${H1 + SH}" x2="${BAR_X}" y2="${H}" stroke="${C.border}" stroke-width=".5" stroke-opacity=".4"/>`,
+		`<line x1="0" y1="${H1 + SH}" x2="${W}" y2="${H1 + SH}" stroke="${cv.border}" stroke-width=".5"/>`,
+		`<line x1="${BAR_X}" y1="${H1 + SH}" x2="${BAR_X}" y2="${H}" stroke="${cv.border}" stroke-width=".5" stroke-opacity=".4"/>`,
 		...rowEls,
 		`</svg>`,
 	].join('\n');
