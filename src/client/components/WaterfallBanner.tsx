@@ -11,12 +11,18 @@ interface Props {
 }
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
-// Adaptive colors are CSS variables defined in the SVG <style> block below.
-// Accent / round colors stay fixed — they work on both light and dark.
+//
+// Adaptive colors use CSS class selectors defined in SVG_STYLE.  Each element
+// carries a `class="wb-*"` name AND a hardcoded dark-theme fill/stroke attribute
+// as a fallback for environments that don't run CSS (e.g. no-style renderers).
+//
+// Approach: CSS classes override presentation attributes (SVG spec), so the
+// class-based @media rule wins when CSS is available; the attribute is the
+// fallback.  This makes the SVG self-contained — no external CSS, no var().
 
 const FONT = "'Cascadia Code',monospace";
 
-// Fixed accent palette (same in light + dark)
+// Fixed accent palette — same for light + dark
 const A = {
 	accent:  '#58a6ff',
 	green:   '#3fb950',
@@ -26,36 +32,6 @@ const A = {
 
 const ROUND_COLORS = [A.accent, A.green, A.yellow, A.red] as const;
 
-// CSS variables — resolved at render time by the SVG <style> block.
-// Dark defaults; light-mode overrides via @media (prefers-color-scheme: light).
-const cv = {
-	bg:     'var(--wb-bg)',
-	panel:  'var(--wb-panel)',
-	border: 'var(--wb-border)',
-	label:  'var(--wb-label)',
-	value:  'var(--wb-value)',
-} as const;
-
-// Injected into every SVG — defines --wb-* vars with dark defaults + light override.
-const SVG_STYLE = `<style>
-  svg {
-    --wb-bg:     #0d1117;
-    --wb-panel:  #161b22;
-    --wb-border: #30363d;
-    --wb-label:  #8b949e;
-    --wb-value:  #e6edf3;
-  }
-  @media (prefers-color-scheme: light) {
-    svg {
-      --wb-bg:     #ffffff;
-      --wb-panel:  #f6f8fa;
-      --wb-border: #d0d7de;
-      --wb-label:  #57606a;
-      --wb-value:  #24292f;
-    }
-  }
-</style>`;
-
 const FORMAT_COLOR: Record<string, string> = {
 	esm:      A.green,
 	umd:      A.yellow,
@@ -63,6 +39,46 @@ const FORMAT_COLOR: Record<string, string> = {
 	iife:     '#e3b341',
 	systemjs: A.accent,
 };
+
+// Adaptive dark → light color map (dark values also used as inline attribute fallbacks)
+const D = {
+	bg:     '#0d1117',
+	panel:  '#161b22',
+	border: '#30363d',
+	label:  '#8b949e',
+	value:  '#e6edf3',
+} as const;
+
+const L = {
+	bg:     '#ffffff',
+	panel:  '#f6f8fa',
+	border: '#d0d7de',
+	label:  '#57606a',
+	value:  '#24292f',
+} as const;
+
+// Fully self-contained SVG style — no var(), no external deps.
+// Dark is the default; light overrides via @media.
+// CSS classes override SVG presentation attributes (fill="...", stroke="..."),
+// so these rules win when CSS runs; the attributes are the no-CSS fallback.
+const SVG_STYLE = `<style>
+  .wb-bg      { fill: ${D.bg}; }
+  .wb-panel   { fill: ${D.panel}; }
+  .wb-outline { fill: none; stroke: ${D.border}; }
+  .wb-line    { stroke: ${D.border}; }
+  .wb-sep     { fill: ${D.border}; }
+  .wb-label   { fill: ${D.label}; }
+  .wb-value   { fill: ${D.value}; }
+  @media (prefers-color-scheme: light) {
+    .wb-bg      { fill: ${L.bg}; }
+    .wb-panel   { fill: ${L.panel}; }
+    .wb-outline { stroke: ${L.border}; }
+    .wb-line    { stroke: ${L.border}; }
+    .wb-sep     { fill: ${L.border}; }
+    .wb-label   { fill: ${L.label}; }
+    .wb-value   { fill: ${L.value}; }
+  }
+</style>`;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -91,7 +107,6 @@ function shortName(url: string, max = 26): string {
 	}
 }
 
-// Approximate char width for Cascadia Code (monospace) at given font-size.
 function cw(s: string, fs = 10) {
 	return Math.ceil(s.length * fs * 0.61);
 }
@@ -109,10 +124,10 @@ function buildSvg(
 
 	const W   = 520;
 	const PAD = 10;
-	const H1  = 28;   // header band
+	const H1  = 28;
 	const R   = 4;
-	const SH  = 18;   // stats line height
-	const RH  = 14;   // row height for both round headers and resource rows
+	const SH  = 18;
+	const RH  = 14;
 
 	const sorted = [...rs].sort((a, b) => a.startTime - b.startTime);
 	const t0     = sorted[0].startTime;
@@ -144,12 +159,12 @@ function buildSvg(
 	const totalRows = rounds.reduce((s, rd) => s + 1 + rd.items.length, 0);
 	const H = H1 + SH + totalRows * RH + 6;
 
-	// ── Header pills (CDN, format) ────────────────────────────────────────
+	// ── Header pills ─────────────────────────────────────────────────────────
 	const fmtLabel = format.toUpperCase();
-	const fmtColor = FORMAT_COLOR[format.toLowerCase()] ?? cv.label;
+	const fmtColor = FORMAT_COLOR[format.toLowerCase()] ?? D.label;
 	const pills = [
 		{ text: cdn,      color: A.accent },
-		{ text: fmtLabel, color: fmtColor  },
+		{ text: fmtLabel, color: fmtColor },
 	];
 	let pillX = W - PAD;
 	const pillEls: string[] = [];
@@ -174,12 +189,12 @@ function buildSvg(
 	const statEls: string[] = [];
 	for (let i = 0; i < statItems.length; i++) {
 		statEls.push(
-			`<text x="${sx}" y="${H1 + 13}" font-family="${FONT}" font-size="10" fill="${cv.label}">${esc(statItems[i])}</text>`,
+			`<text x="${sx}" y="${H1 + 13}" font-family="${FONT}" font-size="10" class="wb-label" fill="${D.label}">${esc(statItems[i])}</text>`,
 		);
 		sx += cw(statItems[i]) + 5;
 		if (i < statItems.length - 1) {
 			statEls.push(
-				`<text x="${sx}" y="${H1 + 13}" font-family="${FONT}" font-size="10" fill="${cv.border}">·</text>`,
+				`<text x="${sx}" y="${H1 + 13}" font-family="${FONT}" font-size="10" class="wb-sep" fill="${D.border}">·</text>`,
 			);
 			sx += cw('·') + 5;
 		}
@@ -195,7 +210,7 @@ function buildSvg(
 		const offsetLabel = `+${fmtMs(round.offset)}`;
 		rowEls.push(
 			`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" fill="${rc}" letter-spacing=".05em">${esc(roundLabel)}</text>` +
-			`<text x="${PAD + cw(roundLabel, 9) + 6}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" fill="${cv.label}">${esc(offsetLabel)}</text>`,
+			`<text x="${PAD + cw(roundLabel, 9) + 6}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" class="wb-label" fill="${D.label}">${esc(offsetLabel)}</text>`,
 		);
 		ry += RH;
 
@@ -206,12 +221,12 @@ function buildSvg(
 			const name = shortName(r.url);
 			const size = fmtBytes(r.transferSize ?? r.decodedBodySize);
 			const altBg = ri % 2 === 1
-				? `<rect x="0" y="${ry}" width="${W}" height="${RH}" fill="${cv.panel}" fill-opacity=".4"/>`
+				? `<rect x="0" y="${ry}" width="${W}" height="${RH}" class="wb-panel" fill="${D.panel}" fill-opacity=".4"/>`
 				: '';
 			rowEls.push(
 				altBg +
-				`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9.5" fill="${cv.value}">${esc(name)}</text>` +
-				`<text x="${BAR_X - 4}" y="${ry + RH - 3}" text-anchor="end" font-family="${FONT}" font-size="9.5" fill="${cv.label}">${esc(size)}</text>` +
+				`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9.5" class="wb-value" fill="${D.value}">${esc(name)}</text>` +
+				`<text x="${BAR_X - 4}" y="${ry + RH - 3}" text-anchor="end" font-family="${FONT}" font-size="9.5" class="wb-label" fill="${D.label}">${esc(size)}</text>` +
 				`<rect x="${(BAR_X + barL).toFixed(1)}" y="${ry + 3}" width="${barW.toFixed(1)}" height="${RH - 6}" rx="1.5" fill="${rc}" fill-opacity=".8"/>`,
 			);
 			ry += RH;
@@ -221,16 +236,19 @@ function buildSvg(
 	return [
 		`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="max-width:100%;height:auto">`,
 		SVG_STYLE,
-		`<rect width="${W}" height="${H}" rx="${R}" fill="${cv.bg}"/>`,
-		`<rect width="${W}" height="${H}" rx="${R}" fill="none" stroke="${cv.border}" stroke-width="1"/>`,
-		`<rect width="${W}" height="${H1}" rx="${R}" fill="${cv.panel}"/>`,
-		`<rect y="${H1 - R}" width="${W}" height="${R}" fill="${cv.panel}"/>`,
-		`<line x1="0" y1="${H1}" x2="${W}" y2="${H1}" stroke="${cv.border}" stroke-width=".5"/>`,
-		`<text x="${PAD}" y="19" font-family="${FONT}" font-size="12" fill="${cv.value}" font-weight="bold">${esc(pkg)}<tspan fill="${cv.label}" font-weight="normal">@${esc(version)}</tspan></text>`,
+		// Background + border — class overrides attribute in CSS-capable renderers
+		`<rect width="${W}" height="${H}" rx="${R}" class="wb-bg" fill="${D.bg}"/>`,
+		`<rect width="${W}" height="${H}" rx="${R}" class="wb-outline" fill="none" stroke="${D.border}" stroke-width="1"/>`,
+		// Header panel
+		`<rect width="${W}" height="${H1}" rx="${R}" class="wb-panel" fill="${D.panel}"/>`,
+		`<rect y="${H1 - R}" width="${W}" height="${R}" class="wb-panel" fill="${D.panel}"/>`,
+		`<line x1="0" y1="${H1}" x2="${W}" y2="${H1}" class="wb-line" stroke="${D.border}" stroke-width=".5"/>`,
+		// Title
+		`<text x="${PAD}" y="19" font-family="${FONT}" font-size="12" class="wb-value" fill="${D.value}" font-weight="bold">${esc(pkg)}<tspan class="wb-label" fill="${D.label}" font-weight="normal">@${esc(version)}</tspan></text>`,
 		...pillEls,
 		...statEls,
-		`<line x1="0" y1="${H1 + SH}" x2="${W}" y2="${H1 + SH}" stroke="${cv.border}" stroke-width=".5"/>`,
-		`<line x1="${BAR_X}" y1="${H1 + SH}" x2="${BAR_X}" y2="${H}" stroke="${cv.border}" stroke-width=".5" stroke-opacity=".4"/>`,
+		`<line x1="0" y1="${H1 + SH}" x2="${W}" y2="${H1 + SH}" class="wb-line" stroke="${D.border}" stroke-width=".5"/>`,
+		`<line x1="${BAR_X}" y1="${H1 + SH}" x2="${BAR_X}" y2="${H}" class="wb-line" stroke="${D.border}" stroke-width=".5" stroke-opacity=".4"/>`,
 		...rowEls,
 		`</svg>`,
 	].join('\n');
