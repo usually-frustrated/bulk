@@ -64,9 +64,9 @@ export function generateBadgeSvg(
 	let vc: string;
 
 	switch (confidence) {
-		case 'established':    baseValue = value;           vc = C.green;    break;
-		case 'tentative':      baseValue = `${value} *`;   vc = C.yellow;   break;
-		case 'server-estimate':baseValue = `~${value}`;    vc = C.yellow;   break;
+		case 'established':    baseValue = value;             vc = C.green;   break;
+		case 'tentative':      baseValue = `${value} *`;     vc = C.yellow;  break;
+		case 'server-estimate':baseValue = `~${value}`;      vc = C.yellow;  break;
 		case 'no-data':        baseValue = 'measure \u2192'; vc = C.pill_bg; break;
 	}
 
@@ -90,26 +90,34 @@ export function generateBadgeSvg(
 	const lx = lw / 2;
 	const vx = lw + vw / 2;
 	const vtextFill = confidence === 'no-data' ? C.accent : '#fff';
+	// Width-scoped ID avoids conflicts when multiple badges appear in the same HTML document
+	const uid = `bg${W}`;
 
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(label)}: ${esc(displayValue)}">
   <title>${esc(label)}: ${esc(displayValue)}</title>
-  <defs>
-    <linearGradient id="g" x2="0" y2="100%">
-      <stop offset="0" stop-color="#fff" stop-opacity=".07"/>
-      <stop offset="1" stop-opacity=".07"/>
-    </linearGradient>
-    <clipPath id="c"><rect width="${W}" height="${H}" rx="${R}" fill="#fff"/></clipPath>
-  </defs>
-  <g clip-path="url(#c)">
-    <rect width="${lw}" height="${H}" fill="#555"/>
-    <rect x="${lw}" width="${vw}" height="${H}" fill="${vc}"/>
-    <rect width="${W}" height="${H}" fill="url(#g)"/>
-  </g>
-  <g text-anchor="middle" font-family="${FONT}" font-size="11">
-    <text x="${lx}" y="14" fill="#000" fill-opacity=".25" aria-hidden="true">${esc(label)}</text>
-    <text x="${lx}" y="13" fill="#fff">${esc(label)}</text>
-    <text x="${vx}" y="14" fill="#000" fill-opacity=".25" aria-hidden="true">${esc(displayValue)}</text>
-    <text x="${vx}" y="13" fill="${vtextFill}">${esc(displayValue)}</text>
+  <style>
+    #${uid} .lb { fill: #f6f8fa }
+    #${uid} .lt { fill: #57606a }
+    #${uid} .bd { stroke: #d0d7de }
+    @media (prefers-color-scheme: dark) {
+      #${uid} .lb { fill: #161b22 }
+      #${uid} .lt { fill: #8b949e }
+      #${uid} .bd { stroke: #30363d }
+    }
+  </style>
+  <g id="${uid}">
+    <defs>
+      <clipPath id="${uid}c"><rect width="${W}" height="${H}" rx="${R}" fill="#fff"/></clipPath>
+    </defs>
+    <g clip-path="url(#${uid}c)">
+      <rect class="lb" width="${W}" height="${H}"/>
+      <rect x="${lw}" width="${vw}" height="${H}" fill="${vc}"/>
+    </g>
+    <rect width="${W}" height="${H}" rx="${R}" fill="none" class="bd" stroke-width=".8"/>
+    <g text-anchor="middle" font-family="${FONT}" font-size="11">
+      <text x="${lx}" y="14" class="lt">${esc(label)}</text>
+      <text x="${vx}" y="14" fill="${vtextFill}">${esc(displayValue)}</text>
+    </g>
   </g>
 </svg>`.trim();
 }
@@ -162,7 +170,7 @@ export function generateStandardBanner(d: BannerData): string {
 	const PAD = 10;
 
 	const sizeStr = d.isError        ? (d.errorMsg ?? 'error')
-	              : d.bytes === null  ? 'measuring…'
+	              : d.bytes === null  ? '—'
 	              : formatSize(d.bytes);
 	const sizeCol = d.isError        ? C.red
 	              : d.bytes === null  ? C.label

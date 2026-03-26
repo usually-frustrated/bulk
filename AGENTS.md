@@ -182,8 +182,11 @@ HEAD → no Content-Length (chunked) → GET → body.byteLength → bytes_raw
 ## 🎨 banner SVG (svg.ts + banner.ts)
 
 ### generateBadgeSvg (compact badge)
-Classic two-pill shield. Width auto-sized to text. Height 20px.
-Confidence → pill color: established=green, tentative=yellow, server-estimate=yellow (~prefix), no-data=dark.
+Two-section badge. Width auto-sized to text. Height 20px. Shares the same GitHub dark palette as the banners.
+- Left section (label): themed — light mode `#f6f8fa` / dark mode `#161b22` (CSS `prefers-color-scheme` media query)
+- Right section (value): confidence color — established=green, tentative=yellow, server-estimate=yellow (~prefix), no-data=dark pill
+- Border: `#d0d7de` (light) / `#30363d` (dark) via CSS
+- Flat design (no gradient); width-scoped IDs (`bg<W>`) prevent clipPath conflicts when multiple badges share a page
 
 ### generateStandardBanner (standard banner)
 Width 520px. Two layout modes selected by whether `BannerData.resources` is populated:
@@ -218,12 +221,13 @@ Handler flow:
 1. Resolves version via `resolveVersion` (D1 cache 1h, then npm registry — read-only, no writes)
 2. Fetches export list via `getPackageExports` (D1 cache, read-only)
 3. Gets size **from D1 only**: `getMeasuredSize` (browser P50) → `getCachedSize` (server HEAD stored by `/_bundle`)
-   - If neither has data yet, `bytes` remains `null` → SVG shows "measuring…"
+   - If neither has data yet, `bytes` remains `null` → SVG shows "—" (static, no live fetch)
    - **No live CDN HEAD requests** — the banner never calls `measureSize`
 4. **Fetches latest resource timings** via `getLatestResourceTimings(pkg, version, 'index', cdn, env)` — queries the most-recent browser measurement session from `resource_timings` table
-5. Derives `fileCount`, `roundTrips`, `durationMs` from the timing rows and passes `resources` array to `generateStandardBanner` — triggers waterfall SVG layout when data is present
-6. Falls back gracefully: missing size → "measuring…"; missing timings → fallback bar layout
-7. Returns error banner SVG on exception (never a 5xx, always an SVG)
+5. **Filters to own resources only** (`isOwnResource(url, pkg)`): keeps URLs containing the package's base name or CDN-internal chunk files (`chunk-XXXXXXX.mjs`); drops transitive dependencies loaded by the CDN (react, react-dom, cookie, etc.). DB rows are kept intact — filtering is display-only.
+6. Derives `fileCount`, `roundTrips`, `durationMs` from the filtered timing rows and passes `resources` array to `generateStandardBanner` — triggers waterfall SVG layout when data is present
+7. Falls back gracefully: missing size → "—" (em dash, static placeholder); missing timings → fallback bar layout
+8. Returns error banner SVG on exception (never a 5xx, always an SVG)
 
 **Data flow summary**:
 ```

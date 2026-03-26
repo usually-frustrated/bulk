@@ -3,6 +3,36 @@ import { generateStandardBanner, generateFullBanner, generateBadgeSvg, formatSiz
 import { resolveVersion, getPackageExports, getCachedSize, getMeasuredSize, getLatestResourceTimings } from '../utils/db';
 import type { CDN } from '../utils/cdn';
 
+/**
+ * Returns true if the resource URL belongs to the primary package being measured,
+ * not a transitive dependency loaded by the CDN.
+ *
+ * CDNs like esm.sh load external deps (react, react-dom, cookie, …) as separate
+ * HTTP requests alongside the package itself. We never want those in the banner
+ * analysis — only files that are part of the package being measured.
+ *
+ * Keeps:
+ *  • URLs that contain the package's own name (e.g. "react-router-dom")
+ *  • CDN-generated chunk files (chunk-XXXXXXX.mjs) which are internal splits
+ *    of the primary package bundle, not separate packages
+ * Drops:
+ *  • URLs containing a different package name / version range operators
+ */
+function isOwnResource(url: string, pkg: string): boolean {
+	// Strip @scope/ prefix so "@scope/name" → "name" for URL substring matching
+	const pkgBase = pkg.startsWith('@')
+		? pkg.split('/').slice(1).join('/').toLowerCase()
+		: pkg.toLowerCase();
+	const lurl = url.toLowerCase();
+	if (lurl.includes(pkgBase)) return true;
+	// Keep CDN-internal chunk files (no external package name in their path segment)
+	try {
+		const seg = new URL(url).pathname.split('/').pop() ?? '';
+		if (/^chunk-[a-z0-9]+\.m?js$/i.test(seg)) return true;
+	} catch {}
+	return false;
+}
+
 export async function handleBannerRequest(
 	request: Request,
 	env: Env,
@@ -99,8 +129,11 @@ export async function handleBannerRequest(
 			let resources: Array<{ url: string; startTime: number; responseEnd: number; transferSize: number | null }> | undefined;
 			try {
 				const timings = await getLatestResourceTimings(pkg, version, 'index', cdn, env);
-				if (timings.length > 0) {
-					resources = timings.map((t) => ({
+				// Filter to the package's own resources — exclude transitive deps the CDN
+				// loads as separate requests (react, react-dom, cookie, etc.)
+				const ownTimings = timings.filter((t) => isOwnResource(t.url, pkg));
+				if (ownTimings.length > 0) {
+					resources = ownTimings.map((t) => ({
 						url:          t.url,
 						startTime:    t.start_time,
 						responseEnd:  t.response_end,
