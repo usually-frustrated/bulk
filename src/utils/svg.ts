@@ -45,6 +45,9 @@ function esc(s: string): string {
 // Use: ![](https://bulk.frustrated.dev/jsdelivr/zustand)
 
 export interface BadgeStats {
+	pkgName?:     string;
+	version?:     string;
+	esm?:         boolean;
 	exportCount?: number;
 	fileCount?:   number;
 	roundTrips?:  number;
@@ -68,11 +71,17 @@ export function generateBadgeSvg(
 	}
 
 	// Build right-side text from stats parts
-	const parts: string[] = [baseValue];
+	const pkgId = stats?.pkgName
+		? stats.version ? `${stats.pkgName}@${stats.version}` : stats.pkgName
+		: null;
+	const parts: string[] = [];
+	if (pkgId)                       parts.push(pkgId);
+	parts.push(baseValue);
 	if (stats?.exportCount != null) parts.push(`${stats.exportCount} export${stats.exportCount !== 1 ? 's' : ''}`);
 	if (stats?.fileCount   != null) parts.push(`${stats.fileCount} file${stats.fileCount !== 1 ? 's' : ''}`);
 	if (stats?.roundTrips  != null) parts.push(`${stats.roundTrips} round trip${stats.roundTrips !== 1 ? 's' : ''}`);
 	if (stats?.durationMs  != null) parts.push(`${Math.round(stats.durationMs)} ms`);
+	if (stats?.esm)                  parts.push('ESM');
 	const displayValue = parts.join('  \u00b7  ');
 
 	const lw = tw(label) + 18;

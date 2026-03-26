@@ -2,7 +2,7 @@ import styles from './Footer.module.css';
 
 export function Footer() {
 	return (
-		<footer class={styles.footer}>
+		<footer class={`bleed-top ${styles.footer}`}>
 			<div class={styles.api}>
 				<span class={styles.apiLabel}>API</span>
 				<div class={styles.apiRoutes}>

@@ -1,3 +1,14 @@
+/* Inner frame — provides vertical padding; bleed lines via global .bleed-top/.bleed-bottom */
+.frameWrap {
+	padding: 2rem 0;
+}
+
+@media (max-width: 600px) {
+	.frameWrap {
+		padding: 1.5rem 0;
+	}
+}
+
 .pkgInputWrap {
 	padding: var(--spacing-section-block);
 	margin-bottom: 1.5rem;

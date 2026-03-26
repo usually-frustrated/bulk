@@ -96,10 +96,19 @@ All colours: `--color-{bg|grid|text|text-muted|accent|border|border-light}`
   than `<Show>` / conditional rendering to toggle interactive state. Reflow when controls
   appear/disappear is disorienting and breaks the visual grid.
 
-- **TUI frame:** `main` has `border-top` + two `position:fixed` `::before`/`::after`
-  pseudo-elements for vertical lines (left/right edges). All three use
-  `--color-border-light`. Horizontal padding inside `main` (`1.5rem`) provides breathing
-  room between content and the vertical lines.
+- **All borders must be full-bleed** (span 100% viewport width or height). Never use CSS
+  `border` property for decorative rules — it sizes to the element. Instead use the global
+  utility classes `.bleed-top` / `.bleed-bottom` (defined in `style.css`), which create
+  `::before` / `::after` pseudo-elements with `width: 100vw` and `position: absolute`.
+  Apply both to the same element when you need top + bottom lines.
+
+- **TUI frame layout:**
+  - `main`: `padding: 0 1.5rem` (horizontal gutter only), `position: relative`
+  - `::before` / `::after` on `main`: vertical lines spanning full viewport height
+    (`position: fixed; top: 0; bottom: 0; width: 1px`)
+  - `.frameWrap` div (first child of `main`): `padding: 2rem 0`, carries `.bleed-top
+    .bleed-bottom` global classes → top and bottom full-bleed horizontal rules
+  - `<footer>` carries `.bleed-top` → full-bleed separator between content and footer
 
 ## App.module.css key classes
 `pkgInputWrap` `inputRow` `inputGroup` `cdnGroup` `exportGroup`

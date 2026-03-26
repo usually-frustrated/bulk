@@ -217,6 +217,7 @@ export function App() {
 
 	return (
 		<main>
+			<div class={`bleed-top bleed-bottom ${styles.frameWrap}`}>
 			<div class="hero-section">
 				<Header />
 
@@ -321,7 +322,8 @@ export function App() {
 
 				</div>
 
-		<Footer />
-	</main>
+			<Footer />
+			</div>
+		</main>
 	);
 }

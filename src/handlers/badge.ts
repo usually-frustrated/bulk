@@ -165,6 +165,9 @@ export async function handleBadgeRequest(request: Request, env: Env, ctx: Execut
 			({ sizeStr, confidence } = await fetchPackageSize(provider, pkg));
 		}
 
+		// Package identity always available — start stats here, enrich below.
+		stats = { pkgName, version, esm: true };
+
 		// Best-effort: enrich badge with export count + timing stats
 		try {
 			const [pkgExports, timings] = await Promise.all([
@@ -187,7 +190,7 @@ export async function handleBadgeRequest(request: Request, env: Env, ctx: Execut
 				const tMax = Math.max(...sortedT.map(r => r.response_end));
 				durationMs = tMax - t0;
 			}
-			if (exportCount || fileCount) stats = { exportCount, fileCount, roundTrips, durationMs };
+			stats = { ...stats, exportCount, fileCount, roundTrips, durationMs };
 		} catch {}
 	} catch {
 		// Version resolution or db failure — fall back gracefully.
