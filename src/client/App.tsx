@@ -232,7 +232,12 @@ export function App() {
 	// ── Banner copy ────────────────────────────────────────────────────────────
 	const [copyBannerText, setCopyBannerText] = createSignal('copy url');
 	const copyBannerUrl = async () => {
-		const url = `${window.location.origin}/_banner/standard/${firstPkg() || 'zustand'}`;
+		const pkg = firstPkg() || 'zustand';
+		const ver = measuredEntries()?.[0]?.version;
+		const cdn = measuredCdn();
+		const pkgAt = ver ? `${pkg}@${ver}` : pkg;
+		const cdnParam = cdn && cdn !== 'jsdelivr' ? `?cdn=${encodeURIComponent(cdn)}` : '';
+		const url = `${window.location.origin}/_banner/standard/${pkgAt}${cdnParam}`;
 		try {
 			await navigator.clipboard.writeText(url);
 			setCopyBannerText('copied!');
