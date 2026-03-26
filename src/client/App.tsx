@@ -279,9 +279,12 @@ export function App() {
 							disabled={measuring() || !isDirty()}
 							aria-label="measure"
 						>&#x25B6; check</button>
-						<Show when={isDirty() && measuredInput() !== null}>
-							<button class={styles.revertBtn} onClick={revertInputs} title="revert changes">&#x21A9;</button>
-						</Show>
+						<button
+							class={styles.revertBtn}
+							onClick={revertInputs}
+							title="revert changes"
+							disabled={!isDirty() || measuredInput() === null}
+						>&#x21A9;</button>
 					</div>
 				</div>
 

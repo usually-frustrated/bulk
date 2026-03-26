@@ -89,6 +89,18 @@ entries with pkg/version/exportKey. Returns `ResourceTimingEntry[]`.
 All colours: `--color-{bg|grid|text|text-muted|accent|border|border-light}`
 `prefers-color-scheme:dark` overrides all `--color-*` vars.
 
+## UI layout rules
+
+- **Controls must never reflow.** Buttons and inputs that can become disabled must always
+  occupy space in the DOM. Use `disabled` (with `opacity: 0.3; cursor: default`) rather
+  than `<Show>` / conditional rendering to toggle interactive state. Reflow when controls
+  appear/disappear is disorienting and breaks the visual grid.
+
+- **TUI frame:** `main` has `border-top` + two `position:fixed` `::before`/`::after`
+  pseudo-elements for vertical lines (left/right edges). All three use
+  `--color-border-light`. Horizontal padding inside `main` (`1.5rem`) provides breathing
+  room between content and the vertical lines.
+
 ## App.module.css key classes
 `pkgInputWrap` `inputRow` `inputGroup` `cdnGroup` `exportGroup`
 `pkgInput` `cdnSelect` `exportSelect`

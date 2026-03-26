@@ -1,5 +1,5 @@
 .footer {
-	padding: var(--spacing-footer-block) 0;
+	padding: var(--spacing-footer-block) 0 1.5rem;
 	margin-top: 2rem;
 	font-size: var(--font-size-label);
 	color: var(--color-text-muted);
