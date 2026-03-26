@@ -21,6 +21,20 @@ export interface ResourceTimingEntry {
 
 // ─── CDN URL construction ─────────────────────────────────────────────────────
 
+/**
+ * Build a direct (non-ESM-transform) CDN URL for a file path within a package.
+ * Used for UMD / CJS / IIFE / SystemJS measurements via <script> tag.
+ */
+export function buildScriptUrl(pkg: string, version: string, filePath: string, cdn: string): string {
+	const path = filePath.startsWith('/') ? filePath : `/${filePath}`;
+	switch (cdn) {
+		case 'jsdelivr': return `https://cdn.jsdelivr.net/npm/${pkg}@${version}${path}`;
+		case 'unpkg':    return `https://unpkg.com/${pkg}@${version}${path}`;
+		// esm.sh doesn't reliably serve raw package files — fall back to jsDelivr
+		default:         return `https://cdn.jsdelivr.net/npm/${pkg}@${version}${path}`;
+	}
+}
+
 export function buildImportmapUrl(pkg: string, version: string, exportKey: string, cdn: string): string {
 	const isRoot = exportKey === 'index';
 	switch (cdn) {
@@ -64,41 +78,41 @@ export function getConnectionInfo(): string {
 // ─── Core measurement function ────────────────────────────────────────────────
 
 /**
- * Load a set of ESM packages in a hidden same-origin iframe, then read
- * the browser's Performance Resource Timing entries for every file fetched.
+ * Load a set of packages in a hidden same-origin iframe, then read the
+ * browser's Performance Resource Timing entries for every file fetched.
  *
- * Returns all resources observed during the load, with the primary import
- * URLs annotated with pkg/version/exportKey.
+ * For ESM (default): uses an import map + dynamic import().
+ * For other formats (UMD, CJS, IIFE, SystemJS): uses a <script> tag with
+ * the direct CDN URL to the pre-built bundle file.
+ *
+ * Returns all resources observed during the load, with the primary
+ * URL(s) annotated with pkg/version/exportKey.
  */
 export async function measurePackages(
 	entries: MeasurementEntry[],
 	cdn: string,
+	format = 'esm',
+	formatPath: string | null = null,
 	timeoutMs = 30_000,
 ): Promise<ResourceTimingEntry[]> {
 	if (!entries.length) return [];
 
-	// Build importmap: bare specifier → CDN URL
-	const imports: Record<string, string> = {};
-	for (const e of entries) {
-		imports[buildBareSpecifier(e.pkg, e.exportKey)] = buildImportmapUrl(
-			e.pkg,
-			e.version,
-			e.exportKey,
-			cdn,
-		);
-	}
+	let srcdoc: string;
+	let primaryUrl: string;
 
-	const importmapJson = JSON.stringify({ imports }, null, 2);
-
-	// Module script: dynamically import each specifier, then signal the parent
-	const importExprs = entries
-		.map(
-			(e) =>
-				`  import(${JSON.stringify(buildBareSpecifier(e.pkg, e.exportKey))}).catch(err => errs.push(err.message))`,
-		)
-		.join(',\n');
-
-	const moduleScript = `
+	if (format === 'esm' || !formatPath) {
+		// ── ESM: import map + dynamic import ─────────────────────────────────
+		const imports: Record<string, string> = {};
+		for (const e of entries) {
+			imports[buildBareSpecifier(e.pkg, e.exportKey)] = buildImportmapUrl(
+				e.pkg, e.version, e.exportKey, cdn,
+			);
+		}
+		const importmapJson = JSON.stringify({ imports }, null, 2);
+		const importExprs = entries
+			.map((e) => `  import(${JSON.stringify(buildBareSpecifier(e.pkg, e.exportKey))}).catch(err => errs.push(err.message))`)
+			.join(',\n');
+		const moduleScript = `
 const errs = [];
 Promise.all([
 ${importExprs}
@@ -108,14 +122,30 @@ ${importExprs}
   parent.postMessage({ type: '__bulk_measure_done', errors: [err.message] }, '*');
 });
 `;
+		srcdoc = [
+			'<!DOCTYPE html><html><head>',
+			`<script type="importmap">${importmapJson}<\/script>`,
+			`<script type="module">${moduleScript}<\/script>`,
+			'</head><body></body></html>',
+		].join('\n');
+		primaryUrl = buildImportmapUrl(entries[0].pkg, entries[0].version, entries[0].exportKey, cdn);
 
-	// Full HTML document as srcdoc (same-origin → can read contentWindow.performance)
-	const srcdoc = [
-		'<!DOCTYPE html><html><head>',
-		`<script type="importmap">${importmapJson}<\/script>`,
-		`<script type="module">${moduleScript}<\/script>`,
-		'</head><body></body></html>',
-	].join('\n');
+	} else {
+		// ── Non-ESM: script tag with direct bundle URL ────────────────────────
+		const scriptUrl = buildScriptUrl(entries[0].pkg, entries[0].version, formatPath, cdn);
+		srcdoc = [
+			'<!DOCTYPE html><html><head>',
+			'<script>',
+			'var s = document.createElement("script");',
+			`s.src = ${JSON.stringify(scriptUrl)};`,
+			's.onload  = function() { parent.postMessage({ type: "__bulk_measure_done", errors: [] }, "*"); };',
+			's.onerror = function() { parent.postMessage({ type: "__bulk_measure_done", errors: ["load error"] }, "*"); };',
+			'document.head.appendChild(s);',
+			'<\/script>',
+			'</head><body></body></html>',
+		].join('\n');
+		primaryUrl = scriptUrl;
+	}
 
 	return new Promise<ResourceTimingEntry[]>((resolve) => {
 		const iframe = document.createElement('iframe');
@@ -146,15 +176,12 @@ ${importExprs}
 				// cross-origin guard (shouldn't happen for srcdoc iframes on same origin)
 			}
 
-			// Annotate primary resources with their entry metadata
-			for (const e of entries) {
-				const primaryUrl = buildImportmapUrl(e.pkg, e.version, e.exportKey, cdn);
-				const match = results.find((r) => r.url === primaryUrl);
-				if (match) {
-					match.pkg = e.pkg;
-					match.version = e.version;
-					match.exportKey = e.exportKey;
-				}
+			// Annotate the primary resource with entry metadata
+			const match = results.find((r) => r.url === primaryUrl);
+			if (match) {
+				match.pkg = entries[0].pkg;
+				match.version = entries[0].version;
+				match.exportKey = entries[0].exportKey;
 			}
 
 			iframe.remove();

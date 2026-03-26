@@ -1,6 +1,7 @@
 import type { Env } from '../types';
 import { parseExports } from '../utils/cdn';
 import { fetchPackageFiles, expandWildcard } from '../utils/wildcard';
+import { detectFormats } from '../utils/formats';
 
 // ─── handler ──────────────────────────────────────────────────────────────────
 
@@ -50,9 +51,13 @@ export async function handleDiscoverRequest(
     const pkgJson = await fetchPackageMetadata(pkg, version);
     const resolvedVersion: string = pkgJson.version ?? version;
 
+    // Always fetch the flat file list — used for both wildcard export expansion
+    // and bundle format detection (UMD/CJS/SystemJS/IIFE).
+    const files = await fetchPackageFiles(pkg, resolvedVersion);
+    const formats = detectFormats(files);
+
     // If no exports field, show all JS files from the tarball
     if (!pkgJson.exports) {
-      const files = await fetchPackageFiles(pkg, resolvedVersion);
       const jsFiles = files.filter((f) => /\.(js|mjs|cjs)$/.test(f));
 
       if (jsFiles.length > 0) {
@@ -77,6 +82,7 @@ export async function handleDiscoverRequest(
           version: resolvedVersion,
           exports: fileExports,
           wildcardResolved: false,
+          formats,
         });
       }
     }
@@ -91,7 +97,6 @@ export async function handleDiscoverRequest(
     let expanded: { key: string; path: string }[] = [];
 
     if (wildcardExports.length > 0) {
-      const files = await fetchPackageFiles(pkg, resolvedVersion);
       for (const entry of wildcardExports) {
         expanded = expanded.concat(expandWildcard(entry.key, entry.path, files));
       }
@@ -106,6 +111,7 @@ export async function handleDiscoverRequest(
       version: resolvedVersion,
       exports: [...staticExports, ...uniqueExpanded],
       wildcardResolved: expanded.length > 0,
+      formats,
     });
   } catch (err: unknown) {
     const status = (err as { status?: number }).status ?? 502;

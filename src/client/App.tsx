@@ -16,11 +16,19 @@ import styles from './App.module.css';
 
 type CDN = 'jsdelivr' | 'esm.sh' | 'unpkg';
 
+interface DetectedFormats {
+	umd:      string | null;
+	cjs:      string | null;
+	systemjs: string | null;
+	iife:     string | null;
+}
+
 interface DiscoverResult {
-	package: string;
-	version: string;
-	exports: { key: string; path: string }[];
+	package:          string;
+	version:          string;
+	exports:          { key: string; path: string }[];
 	wildcardResolved: boolean;
+	formats:          DetectedFormats;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -58,6 +66,7 @@ export function App() {
 	const [pkgInput, setPkgInput] = createSignal(initialPkg);
 	const [pkg, setPkg] = createSignal(initialPkg);
 	const [cdn, setCdn] = createSignal<CDN>('jsdelivr');
+	const [format, setFormat] = createSignal('esm');
 
 	// Derived: committed package name only (no export suffix)
 	const firstPkg = () => parseInput(pkg()).pkg;
@@ -98,6 +107,7 @@ export function App() {
 	const [measuredCdn, setMeasuredCdn] = createSignal<CDN>('jsdelivr');
 	const [measuredInput, setMeasuredInput] = createSignal<string | null>(null);
 	const [measuredExport, setMeasuredExport] = createSignal('');
+	const [measuredFormat, setMeasuredFormat] = createSignal('esm');
 
 	// ── Export selection ────────────────────────────────────────────────────────
 
@@ -109,6 +119,7 @@ export function App() {
 		if (pkgName !== lastPkg) {
 			lastPkg = pkgName;
 			setSelectedExport('');
+			setFormat('esm');
 			setDiscoverData(null);
 			setResources(null);
 			setMeasuredEntries(null);
@@ -122,7 +133,8 @@ export function App() {
 		measuredInput() === null ||
 		pkgInput() !== measuredInput() ||
 		cdn() !== measuredCdn() ||
-		selectedExport() !== measuredExport();
+		selectedExport() !== measuredExport() ||
+		format() !== measuredFormat();
 
 	// inputDirty: pkg text field changed since last commit (exports list is stale)
 	const inputDirty = () => pkgInput() !== pkg();
@@ -133,6 +145,7 @@ export function App() {
 			setPkgInput(measuredInput()!);
 			setCdn(measuredCdn());
 			setSelectedExport(measuredExport());
+			setFormat(measuredFormat());
 		} else {
 			setPkgInput(pkg());
 		}
@@ -177,7 +190,12 @@ export function App() {
 
 			// 3. Run browser measurement in iframe
 			const selectedCdn = cdn();
-			const rawResources = await measurePackages(entries, selectedCdn);
+			const selectedFormat = format();
+			const formats = dr.formats ?? {};
+			const formatPath = selectedFormat !== 'esm'
+				? (formats as Record<string, string | null>)[selectedFormat] ?? null
+				: null;
+			const rawResources = await measurePackages(entries, selectedCdn, selectedFormat, formatPath);
 
 			// 4. Report to /_record (fire-and-forget)
 			const annotated = rawResources.filter(
@@ -200,6 +218,7 @@ export function App() {
 				setResources(rawResources);
 				setMeasuredEntries(entries);
 				setMeasuredCdn(selectedCdn);
+				setMeasuredFormat(selectedFormat);
 				setMeasuredInput(pkgInput());
 				setMeasuredExport(selectedExport());
 			});
@@ -274,6 +293,22 @@ export function App() {
 							</select>
 						</div>
 
+						<div class={styles.cdnGroup}>
+							<label class={styles.inputLabel}>format</label>
+							<select
+								class={styles.cdnSelect}
+								value={format()}
+								onChange={(e) => setFormat(e.currentTarget.value)}
+								disabled={inputDirty()}
+							>
+								<option value="esm">ESM</option>
+								<option value="umd"      disabled={!discoverData()?.formats?.umd}>UMD</option>
+								<option value="cjs"      disabled={!discoverData()?.formats?.cjs}>CJS</option>
+								<option value="iife"     disabled={!discoverData()?.formats?.iife}>IIFE</option>
+								<option value="systemjs" disabled={!discoverData()?.formats?.systemjs}>SystemJS</option>
+							</select>
+						</div>
+
 						<button
 							classList={{ [styles.runBtn]: true, [styles.runBtnDirty]: isDirty() }}
 							onClick={handleMeasure}
@@ -309,6 +344,7 @@ export function App() {
 							pkg={measuredEntries()![0]?.pkg ?? firstPkg()}
 							version={measuredEntries()![0]?.version ?? ''}
 							cdn={measuredCdn()}
+							format={measuredFormat()}
 						/>
 					</section>
 				</Show>
@@ -316,7 +352,12 @@ export function App() {
 				{/* ── Badge ───────────────────────────────────────────────── */}
 				<Show when={firstPkg()}>
 					<div classList={{ [styles.resultsDimmed]: isDirty() }}>
-						<BadgeGenerator pkg={firstPkg} />
+						<BadgeGenerator
+							pkg={firstPkg}
+							version={() => measuredEntries()?.[0]?.version ?? ''}
+							cdn={() => measuredCdn()}
+							format={() => measuredFormat()}
+						/>
 					</div>
 				</Show>
 

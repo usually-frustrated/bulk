@@ -7,6 +7,7 @@ interface Props {
 	pkg:       string;
 	version:   string;
 	cdn:       string;
+	format:    string; // 'esm' | 'umd' | 'cjs' | 'iife' | 'systemjs'
 }
 
 // ─── Design tokens (GitHub dark card) ────────────────────────────────────────
@@ -61,11 +62,20 @@ function cw(s: string, fs = 10) {
 
 // ─── SVG builder ─────────────────────────────────────────────────────────────
 
+const FORMAT_COLOR: Record<string, string> = {
+	esm:      '#3fb950', // green
+	umd:      '#d29922', // yellow
+	cjs:      '#8b949e', // muted
+	iife:     '#e3b341', // warm yellow
+	systemjs: '#58a6ff', // blue
+};
+
 function buildSvg(
 	rs: ResourceTimingEntry[],
 	pkg: string,
 	version: string,
 	cdn: string,
+	format: string,
 ): string {
 	if (!rs.length) return '';
 
@@ -107,10 +117,12 @@ function buildSvg(
 	const totalRows = rounds.reduce((s, rd) => s + 1 + rd.items.length, 0);
 	const H = H1 + SH + totalRows * RH + 6;
 
-	// ── Header pills (CDN, ESM) ───────────────────────────────────────────
+	// ── Header pills (CDN, format) ────────────────────────────────────────
+	const fmtLabel = format.toUpperCase();
+	const fmtColor = FORMAT_COLOR[format.toLowerCase()] ?? C.label;
 	const pills = [
-		{ text: cdn,   color: C.accent },
-		{ text: 'ESM', color: C.green  },
+		{ text: cdn,      color: C.accent },
+		{ text: fmtLabel, color: fmtColor  },
 	];
 	let pillX = W - PAD;
 	const pillEls: string[] = [];
@@ -199,6 +211,6 @@ function buildSvg(
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function WaterfallBanner(props: Props) {
-	const svg = createMemo(() => buildSvg(props.resources, props.pkg, props.version, props.cdn));
+	const svg = createMemo(() => buildSvg(props.resources, props.pkg, props.version, props.cdn, props.format));
 	return <div class={styles.wrap} innerHTML={svg()} />;
 }

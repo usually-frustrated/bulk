@@ -166,7 +166,7 @@ export async function handleBadgeRequest(request: Request, env: Env, ctx: Execut
 		}
 
 		// Package identity always available — start stats here, enrich below.
-		stats = { pkgName, version, esm: true };
+		stats = { pkgName, version, format: 'ESM' };
 
 		// Best-effort: enrich badge with export count + timing stats
 		try {

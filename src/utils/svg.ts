@@ -47,7 +47,7 @@ function esc(s: string): string {
 export interface BadgeStats {
 	pkgName?:     string;
 	version?:     string;
-	esm?:         boolean;
+	format?:      string; // e.g. 'ESM', 'UMD', 'CJS', 'IIFE'
 	exportCount?: number;
 	fileCount?:   number;
 	roundTrips?:  number;
@@ -81,7 +81,7 @@ export function generateBadgeSvg(
 	if (stats?.fileCount   != null) parts.push(`${stats.fileCount} file${stats.fileCount !== 1 ? 's' : ''}`);
 	if (stats?.roundTrips  != null) parts.push(`${stats.roundTrips} round trip${stats.roundTrips !== 1 ? 's' : ''}`);
 	if (stats?.durationMs  != null) parts.push(`${Math.round(stats.durationMs)} ms`);
-	if (stats?.esm)                  parts.push('ESM');
+	if (stats?.format)               parts.push(stats.format);
 	const displayValue = parts.join('  \u00b7  ');
 
 	const lw = tw(label) + 18;
