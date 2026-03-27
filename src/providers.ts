@@ -20,8 +20,8 @@ const providers: Record<string, Provider> = {
 		name: 'Skypack',
 		url: (pkg) => `https://cdn.skypack.dev/${pkg}`,
 	},
-	esmsh: {
-		id: 'esmsh',
+	'esm.sh': {
+		id: 'esm.sh',
 		name: 'esm.sh',
 		url: (pkg) => `https://esm.sh/${pkg}`,
 	},

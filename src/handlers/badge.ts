@@ -3,9 +3,9 @@ import { generateBadgeSvg, type BadgeStats } from '../utils/svg';
 import { buildCacheControl, parsePath, type ParsedPath } from '../utils/pkg';
 import { getProvider, getDefaultProvider, type Provider } from '../providers';
 import { Telemetry } from '../utils/telemetry';
-import { resolveVersion, getMeasuredSize, getPackageExports, getLatestResourceTimings } from '../utils/db';
+import { resolveVersion, getMeasuredSizeFromWaterfall, getPackageExports, getLatestWaterfall } from '../utils/db';
 import { DEFAULT_CDN } from '../utils/cdn';
-import type { Confidence } from '../utils/cdn';
+import type { Confidence, CDN } from '../utils/cdn';
 import type { Env } from '../types';
 
 interface FetchResult {
@@ -79,7 +79,7 @@ async function fetchPackageSize(provider: Provider, pkg: string): Promise<FetchR
 }
 
 // Cache version - increment this to invalidate all caches on deployment
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 
 export async function handleBadgeRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 	const requestStartTime = Date.now();
@@ -143,7 +143,7 @@ export async function handleBadgeRequest(request: Request, env: Env, ctx: Execut
 		);
 	}
 
-	// ── try browser-measured P50 first (Decision 4 priority order) ──────────
+	// ── try browser-measured P50 first ──────────────────────────────────────
 	let sizeStr: string;
 	let confidence: Confidence;
 	let stats: BadgeStats | undefined;
@@ -154,11 +154,17 @@ export async function handleBadgeRequest(request: Request, env: Env, ctx: Execut
 	const pkgName = atIdx > 0 ? pkg.slice(0, atIdx) : pkg;
 	const pkgVersion = atIdx > 0 ? pkg.slice(atIdx + 1) : null;
 
+	// Map the provider ID to a CDN type used in the database; fall back to DEFAULT_CDN
+	// for legacy providers (skypack) that don't have a CDN equivalent.
+	const cdn = (['jsdelivr', 'esm.sh', 'unpkg'] as CDN[]).includes(providerId as CDN)
+		? providerId as CDN
+		: DEFAULT_CDN;
+
 	try {
 		const version = pkgVersion ?? await resolveVersion(pkgName, env);
-		const measured = await getMeasuredSize(pkgName, version, 'index', DEFAULT_CDN, env);
+		const measured = await getMeasuredSizeFromWaterfall(pkgName, version, 'index', cdn, env);
 		if (measured) {
-			sizeStr = formatSize(measured.bytes_transfer ?? measured.bytes_raw ?? 0);
+			sizeStr = formatSize(measured.bytes_raw ?? 0);
 			confidence = measured.confidence;
 		} else {
 			// Not enough browser samples — fall back to HEAD estimate.
@@ -168,29 +174,20 @@ export async function handleBadgeRequest(request: Request, env: Env, ctx: Execut
 		// Package identity always available — start stats here, enrich below.
 		stats = { pkgName, version, format: 'ESM' };
 
-		// Best-effort: enrich badge with export count + timing stats
+		// Best-effort: enrich badge with export count + waterfall stats
 		try {
-			const [pkgExports, timings] = await Promise.all([
+			const [pkgExports, waterfall] = await Promise.all([
 				getPackageExports(pkgName, version, env),
-				getLatestResourceTimings(pkgName, version, 'index', DEFAULT_CDN, env),
+				getLatestWaterfall(pkgName, version, 'index', cdn, env),
 			]);
 			const exportCount = pkgExports.length || undefined;
 			let fileCount: number | undefined;
 			let roundTrips: number | undefined;
-			let durationMs: number | undefined;
-			if (timings.length > 0) {
-				fileCount = timings.length;
-				const sortedT = [...timings].sort((a, b) => a.start_time - b.start_time);
-				let trips = 1;
-				for (let i = 1; i < sortedT.length; i++) {
-					if (sortedT[i].start_time - sortedT[i - 1].start_time > 5) trips++;
-				}
-				roundTrips = trips;
-				const t0   = Math.min(...sortedT.map(r => r.start_time));
-				const tMax = Math.max(...sortedT.map(r => r.response_end));
-				durationMs = tMax - t0;
+			if (waterfall.length > 0) {
+				fileCount  = waterfall.length;
+				roundTrips = Math.max(...waterfall.map(r => r.round_trip)) + 1;
 			}
-			stats = { ...stats, exportCount, fileCount, roundTrips, durationMs };
+			stats = { ...stats, exportCount, fileCount, roundTrips };
 		} catch {}
 	} catch {
 		// Version resolution or db failure — fall back gracefully.
