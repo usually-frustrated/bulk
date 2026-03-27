@@ -96,8 +96,8 @@ function fmtBytes(n: number | null | undefined): string {
 
 function shortName(url: string, max = 26): string {
 	try {
-		const last = new URL(url).pathname.split('/').filter(Boolean).at(-1);
-		const name = last ?? url;
+		const segs = new URL(url).pathname.split('/').filter(s => s && !s.startsWith('+'));
+		const name = segs.at(-1) ?? url;
 		return name.length > max ? name.slice(0, max - 1) + '\u2026' : name;
 	} catch {
 		return url.slice(0, max);
