@@ -222,9 +222,7 @@ function buildSvg(
 			const barW = Math.max(4, rawW(r.decodedBodySize ?? 0) * scale);
 			const name = shortName(r.url);
 			const size = fmtBytes(r.decodedBodySize ?? r.transferSize);
-			const altBg = ri % 2 === 1
-				? `<rect x="0" y="${ry}" width="${W}" height="${RH}" class="wb-panel" fill="${D.panel}" fill-opacity=".4"/>`
-				: '';
+			const altBg = `<rect x="0" y="${ry}" width="${W}" height="${RH}" fill="#000" fill-opacity=".06"/>`;
 			rowEls.push(
 				altBg +
 				`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9.5" class="wb-value" fill="${D.value}">${esc(name)}</text>` +
