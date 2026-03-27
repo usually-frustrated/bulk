@@ -193,6 +193,10 @@ function buildSvg(
 	}
 
 	// ── Content rows ─────────────────────────────────────────────────────────
+	// Each round occupies an equal horizontal slot so bars progress left→right
+	// across round trips without overlapping, matching structural dependency order.
+	const slotW = BAR_W / rounds.length;
+
 	const rowEls: string[] = [];
 	let ry = H1 + SH;
 
@@ -204,10 +208,13 @@ function buildSvg(
 		);
 		ry += RH;
 
+		// Bar slot for this round starts at round.idx * slotW
+		const slotOffset = round.idx * slotW;
+
 		for (let ri = 0; ri < round.items.length; ri++) {
 			const r    = round.items[ri];
-			const barL = 0;
-			const barW = Math.max(4, ((r.decodedBodySize ?? 0) / maxBytes) * BAR_W);
+			const barL = slotOffset;
+			const barW = Math.max(4, ((r.decodedBodySize ?? 0) / maxBytes) * slotW);
 			const name = shortName(r.url);
 			const size = fmtBytes(r.decodedBodySize ?? r.transferSize);
 			const altBg = ri % 2 === 1
