@@ -17,9 +17,11 @@ const PATTERNS: Record<keyof DetectedFormats, RegExp[]> = {
 		/\/umd\/[^/]+\.js$/i,
 	],
 	cjs: [
+		/\.cjs\.min\.js$/i,
 		/\.cjs\.js$/i,
 		/\.cjs$/i,
 		/\.commonjs(\.min)?\.js$/i,
+		/\/cjs\/[^/]+\.min\.js$/i,
 		/\/cjs\/[^/]+\.js$/i,
 	],
 	systemjs: [

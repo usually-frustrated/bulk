@@ -195,16 +195,19 @@ ${importExprs}
 		primaryUrl = imports[buildBareSpecifier(entries[0].pkg, entries[0].exportKey)] ?? '';
 
 	} else {
-		// ── Non-ESM: script tag with direct bundle URL ────────────────────────
+		// ── Non-ESM: fetch bundle to measure size ─────────────────────────────
+		// Classic <script> tags make no-CORS requests, so the browser zeroes out
+		// decodedBodySize/transferSize in the Performance API even when the server
+		// sets Timing-Allow-Origin: *.  fetch() is CORS by default; jsDelivr
+		// returns Access-Control-Allow-Origin: * so size data is always exposed.
 		const scriptUrl = buildScriptUrl(entries[0].pkg, entries[0].version, formatPath, cdn);
 		srcdoc = [
 			'<!DOCTYPE html><html><head>',
 			'<script>',
-			'var s = document.createElement("script");',
-			`s.src = ${JSON.stringify(scriptUrl)};`,
-			's.onload  = function() { parent.postMessage({ type: "__bulk_measure_done", errors: [] }, "*"); };',
-			's.onerror = function() { parent.postMessage({ type: "__bulk_measure_done", errors: ["load error"] }, "*"); };',
-			'document.head.appendChild(s);',
+			`fetch(${JSON.stringify(scriptUrl)})`,
+			'  .then(function(r) { return r.blob(); })',
+			'  .then(function() { parent.postMessage({ type: "__bulk_measure_done", errors: [] }, "*"); })',
+			'  .catch(function(err) { parent.postMessage({ type: "__bulk_measure_done", errors: [err.message] }, "*"); });',
 			'<\/script>',
 			'</head><body></body></html>',
 		].join('\n');
