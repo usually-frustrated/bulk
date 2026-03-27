@@ -93,14 +93,11 @@ function fmtBytes(n: number | null | undefined): string {
 	return `${(n / 1024).toFixed(1)}\u202fkB`;
 }
 
-function fmtMs(ms: number) {
-	return `${Math.round(ms)}\u202fms`;
-}
 
 function shortName(url: string, max = 26): string {
 	try {
-		const last = new URL(url).pathname.split('/').filter(Boolean).at(-1);
-		const name = last ?? url;
+		const segs = new URL(url).pathname.split('/').filter(s => s && !s.startsWith('+'));
+		const name = segs.at(-1) ?? url;
 		return name.length > max ? name.slice(0, max - 1) + '\u2026' : name;
 	} catch {
 		return url.slice(0, max);
@@ -130,25 +127,22 @@ function buildSvg(
 	const RH  = 14;
 
 	const sorted = [...rs].sort((a, b) => a.startTime - b.startTime);
-	const t0     = sorted[0].startTime;
-	const tEnd   = Math.max(...sorted.map(r => r.responseEnd));
-	const span   = Math.max(1, tEnd - t0);
 
 	// ── Group into rounds ────────────────────────────────────────────────────
-	interface Round { idx: number; offset: number; items: typeof sorted }
+	interface Round { idx: number; items: typeof sorted }
 	const rounds: Round[] = [];
 	let cur: typeof sorted = [sorted[0]];
 	for (let i = 1; i < sorted.length; i++) {
 		if (sorted[i].startTime - sorted[i - 1].startTime > 5) {
-			rounds.push({ idx: rounds.length, offset: cur[0].startTime - t0, items: cur });
+			rounds.push({ idx: rounds.length, items: cur });
 			cur = [];
 		}
 		cur.push(sorted[i]);
 	}
-	rounds.push({ idx: rounds.length, offset: cur[0].startTime - t0, items: cur });
+	rounds.push({ idx: rounds.length, items: cur });
 
-	const totalWire   = rs.reduce((s, r) => s + (r.transferSize   ?? 0), 0);
 	const totalParsed = rs.reduce((s, r) => s + (r.decodedBodySize ?? 0), 0);
+	const maxBytes    = Math.max(1, ...rs.map(r => r.decodedBodySize ?? 0));
 
 	// ── Layout ───────────────────────────────────────────────────────────────
 	const LABEL_W = 145;
@@ -180,10 +174,8 @@ function buildSvg(
 	// ── Stats line ───────────────────────────────────────────────────────────
 	const statItems = [
 		`${rs.length} file${rs.length !== 1 ? 's' : ''}`,
-		`${fmtBytes(totalWire)} wire`,
-		`${fmtBytes(totalParsed)} parsed`,
+		`${fmtBytes(totalParsed)} total`,
 		`${rounds.length} round trip${rounds.length !== 1 ? 's' : ''}`,
-		fmtMs(span) + ' total',
 	];
 	let sx = PAD;
 	const statEls: string[] = [];
@@ -201,28 +193,36 @@ function buildSvg(
 	}
 
 	// ── Content rows ─────────────────────────────────────────────────────────
+	// Round N's bar offset = sum of max bar widths of rounds 0..N-1.
+	// Scale the whole thing so the total fits exactly in BAR_W.
+	const rawW = (bytes: number) => (bytes / maxBytes) * BAR_W;
+	const roundMaxRaw = rounds.map(rd =>
+		Math.max(4, ...rd.items.map(r => rawW(r.decodedBodySize ?? 0))),
+	);
+	const totalRaw = roundMaxRaw.reduce((s, w) => s + w, 0);
+	const scale    = BAR_W / Math.max(totalRaw, 1);
+	const roundOffsets = rounds.map((_, i) =>
+		roundMaxRaw.slice(0, i).reduce((s, w) => s + w * scale, 0),
+	);
+
 	const rowEls: string[] = [];
 	let ry = H1 + SH;
 
 	for (const round of rounds) {
 		const rc = ROUND_COLORS[Math.min(round.idx, ROUND_COLORS.length - 1)];
 		const roundLabel  = `ROUND ${round.idx + 1}`;
-		const offsetLabel = `+${fmtMs(round.offset)}`;
 		rowEls.push(
-			`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" fill="${rc}" letter-spacing=".05em">${esc(roundLabel)}</text>` +
-			`<text x="${PAD + cw(roundLabel, 9) + 6}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" class="wb-label" fill="${D.label}">${esc(offsetLabel)}</text>`,
+			`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" fill="${rc}" letter-spacing=".05em">${esc(roundLabel)}</text>`,
 		);
 		ry += RH;
 
 		for (let ri = 0; ri < round.items.length; ri++) {
 			const r    = round.items[ri];
-			const barL = ((r.startTime - t0) / span) * BAR_W;
-			const barW = Math.max(4, ((r.responseEnd - r.startTime) / span) * BAR_W);
+			const barL = roundOffsets[round.idx];
+			const barW = Math.max(4, rawW(r.decodedBodySize ?? 0) * scale);
 			const name = shortName(r.url);
-			const size = fmtBytes(r.transferSize ?? r.decodedBodySize);
-			const altBg = ri % 2 === 1
-				? `<rect x="0" y="${ry}" width="${W}" height="${RH}" class="wb-panel" fill="${D.panel}" fill-opacity=".4"/>`
-				: '';
+			const size = fmtBytes(r.decodedBodySize ?? r.transferSize);
+			const altBg = `<rect x="${BAR_X}" y="${ry + 3}" width="${BAR_W}" height="${RH - 6}" rx="1.5" fill="#000" fill-opacity=".06"/>`;
 			rowEls.push(
 				altBg +
 				`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9.5" class="wb-value" fill="${D.value}">${esc(name)}</text>` +

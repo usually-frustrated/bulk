@@ -2,7 +2,6 @@ import { createSignal, createEffect, on, Show, For, onMount, batch } from 'solid
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { WaterfallBanner } from './components/WaterfallBanner';
-import { BadgeGenerator } from './components/BadgeGenerator';
 import {
 	measurePackages,
 	getBrowserInfo,
@@ -29,6 +28,7 @@ interface DiscoverResult {
 	exports:          { key: string; path: string }[];
 	wildcardResolved: boolean;
 	formats:          DetectedFormats;
+	externalDeps:     string[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -195,11 +195,12 @@ export function App() {
 			const formatPath = selectedFormat !== 'esm'
 				? (formats as Record<string, string | null>)[selectedFormat] ?? null
 				: null;
-			const rawResources = await measurePackages(entries, selectedCdn, selectedFormat, formatPath);
+			const rawResources = await measurePackages(entries, selectedCdn, selectedFormat, formatPath, dr.externalDeps ?? []);
 
 			// 4. Report to /_record (fire-and-forget)
+			// Include cached resources (transferSize may be 0) as long as we know the size.
 			const annotated = rawResources.filter(
-				(r) => r.pkg && typeof r.transferSize === 'number' && r.transferSize > 0,
+				(r) => r.pkg && typeof r.decodedBodySize === 'number' && r.decodedBodySize > 0,
 			);
 			if (annotated.length) {
 				fetch('/_record', {
@@ -232,11 +233,11 @@ export function App() {
 	// ── Banner copy ────────────────────────────────────────────────────────────
 	const [copyBannerText, setCopyBannerText] = createSignal('copy url');
 	const copyBannerUrl = async () => {
-		const pkg = firstPkg() || 'zustand';
+		const p = firstPkg() || 'zustand';
 		const ver = measuredEntries()?.[0]?.version;
-		const cdn = measuredCdn();
-		const pkgAt = ver ? `${pkg}@${ver}` : pkg;
-		const cdnParam = cdn && cdn !== 'jsdelivr' ? `?cdn=${encodeURIComponent(cdn)}` : '';
+		const selectedCdn = cdn();
+		const pkgAt = ver ? `${p}@${ver}` : p;
+		const cdnParam = selectedCdn && selectedCdn !== 'jsdelivr' ? `?cdn=${encodeURIComponent(selectedCdn)}` : '';
 		const url = `${window.location.origin}/_banner/standard/${pkgAt}${cdnParam}`;
 		try {
 			await navigator.clipboard.writeText(url);
@@ -271,6 +272,21 @@ export function App() {
 							/>
 						</div>
 
+						<button
+							classList={{ [styles.runBtn]: true, [styles.runBtnDirty]: isDirty() }}
+							onClick={handleMeasure}
+							disabled={measuring() || !isDirty()}
+							aria-label="measure"
+						>&#x25B6; check</button>
+						<button
+							class={styles.revertBtn}
+							onClick={revertInputs}
+							title="revert changes"
+							disabled={!isDirty() || measuredInput() === null}
+						>&#x21A9;</button>
+					</div>
+
+					<div class={styles.controlsRow}>
 						<div class={styles.exportGroup}>
 							<label class={styles.inputLabel}>export</label>
 							<select
@@ -324,19 +340,6 @@ export function App() {
 								<option value="systemjs" disabled={!discoverData()?.formats?.systemjs}>SystemJS</option>
 							</select>
 						</div>
-
-						<button
-							classList={{ [styles.runBtn]: true, [styles.runBtnDirty]: isDirty() }}
-							onClick={handleMeasure}
-							disabled={measuring() || !isDirty()}
-							aria-label="measure"
-						>&#x25B6; check</button>
-						<button
-							class={styles.revertBtn}
-							onClick={revertInputs}
-							title="revert changes"
-							disabled={!isDirty() || measuredInput() === null}
-						>&#x21A9;</button>
 					</div>
 				</div>
 
@@ -369,19 +372,7 @@ export function App() {
 					</section>
 				</Show>
 
-				{/* ── Badge ───────────────────────────────────────────────── */}
-				<Show when={firstPkg()}>
-					<div classList={{ [styles.resultsDimmed]: isDirty() }}>
-						<BadgeGenerator
-							pkg={firstPkg}
-							version={() => measuredEntries()?.[0]?.version ?? ''}
-							cdn={() => measuredCdn()}
-							format={() => measuredFormat()}
-						/>
-					</div>
-				</Show>
-
-				</div>
+								</div>
 
 			<Footer />
 			</div>

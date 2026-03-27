@@ -1,8 +1,11 @@
 import type { Env } from '../types';
+import type { BannerResource } from '../utils/svg';
 import { generateStandardBanner, generateFullBanner, generateBadgeSvg, formatSize } from '../utils/svg';
-import { resolveVersion, getPackageExports, getCachedSize, getMeasuredSize, getLatestResourceTimings } from '../utils/db';
-import { buildCdnUrl, measureSize } from '../utils/cdn';
+import { resolveVersion, getPackageExports, getCachedSize, getMeasuredSizeFromWaterfall, getLatestWaterfall } from '../utils/db';
 import type { CDN } from '../utils/cdn';
+
+// Bump to globally invalidate all banner caches on deployment.
+export const BANNER_CACHE_VERSION = 'v1';
 
 export async function handleBannerRequest(
 	request: Request,
@@ -46,6 +49,19 @@ export async function handleBannerRequest(
 	const cdn: CDN = (url.searchParams.get('cdn') as CDN | null) ?? 'jsdelivr';
 	let version = versionHint;
 
+	const isLocal = url.hostname === 'localhost';
+	const cache = caches.default;
+
+	// For standard banners: check explicit cache first. The record handler purges
+	// this same cache key whenever new waterfall data is saved for the package.
+	if (!isLocal && type === 'standard') {
+		const cacheUrl = new URL(url.toString());
+		cacheUrl.searchParams.set('bv', BANNER_CACHE_VERSION);
+		const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
+		const cached = await cache.match(cacheKey);
+		if (cached) return cached;
+	}
+
 	try {
 		// Resolve version
 		version = versionHint === 'latest'
@@ -53,12 +69,11 @@ export async function handleBannerRequest(
 			: versionHint;
 
 		if (type === 'compact') {
-			// Try to get size from DB first, then measure
 			let bytes: number | null = null;
-			let confidence: 'established' | 'server-estimate' = 'server-estimate';
+			let confidence: 'established' | 'tentative' | 'server-estimate' = 'server-estimate';
 			try {
-				const ms = await getMeasuredSize(pkg, version, 'index', cdn, env);
-				if (ms) { bytes = ms.bytes_transfer ?? ms.bytes_raw ?? null; confidence = 'established'; }
+				const ms = await getMeasuredSizeFromWaterfall(pkg, version, 'index', cdn, env);
+				if (ms) { bytes = ms.bytes_raw ?? null; confidence = ms.confidence; }
 			} catch {}
 			if (bytes === null) {
 				try {
@@ -80,58 +95,33 @@ export async function handleBannerRequest(
 		const hasUmd = false; // we don't check UMD here; keep simple
 
 		if (type === 'standard') {
-			// Get index export size
+			// Fetch the latest structural waterfall from the database.
+			// It carries pre-computed round_trip indices and decoded byte sizes.
 			let bytes: number | null = null;
+			let fileCount: number | undefined;
+			let roundTrips: number | undefined;
+			let resources: BannerResource[] | undefined;
 			try {
-				const ms = await getMeasuredSize(pkg, version, 'index', cdn, env);
-				if (ms) bytes = ms.bytes_transfer ?? ms.bytes_raw ?? null;
+				const wf = await getLatestWaterfall(pkg, version, 'index', cdn, env);
+				if (wf.length > 0) {
+					resources  = wf.map((r) => ({ url: r.url, roundTrip: r.round_trip, bytes: r.bytes }));
+					fileCount  = resources.length;
+					roundTrips = Math.max(...resources.map((r) => r.roundTrip)) + 1;
+					// Derive total size as sum of all file bytes in the waterfall
+					const total = resources.reduce<number | null>((acc, r) => {
+						if (acc === null || r.bytes === null) return null;
+						return acc + r.bytes;
+					}, 0);
+					bytes = total;
+				}
 			} catch {}
+			// Fall back to server-estimated size if no waterfall data
 			if (bytes === null) {
 				try {
 					const cs = await getCachedSize(pkg, version, 'index', cdn, env);
 					if (cs) bytes = cs.bytes_transfer ?? cs.bytes_raw ?? null;
 				} catch {}
 			}
-			if (bytes === null) {
-				// Measure live (fire-and-forget save)
-				try {
-					const indexEntry = exports.find(e => e.key === 'index') ?? exports[0];
-					if (indexEntry) {
-						const cdnUrl = buildCdnUrl(pkg, version, indexEntry.key, indexEntry.path, cdn);
-						const result = await measureSize(cdnUrl);
-						bytes = result.bytes_transfer ?? result.bytes_raw ?? null;
-					}
-				} catch {}
-			}
-
-				// Fetch per-resource timings from the latest browser measurement session
-			// so the banner can render a network waterfall.
-			let fileCount: number | undefined;
-			let roundTrips: number | undefined;
-			let durationMs: number | undefined;
-			let resources: Array<{ url: string; startTime: number; responseEnd: number; transferSize: number | null }> | undefined;
-			try {
-				const timings = await getLatestResourceTimings(pkg, version, 'index', cdn, env);
-				if (timings.length > 0) {
-					resources = timings.map((t) => ({
-						url:          t.url,
-						startTime:    t.start_time,
-						responseEnd:  t.response_end,
-						transferSize: t.transfer_size,
-					}));
-					fileCount = resources.length;
-					// Compute round trips from timing gaps (>5 ms = new round)
-					const sorted = [...resources].sort((a, b) => a.startTime - b.startTime);
-					let trips = 1;
-					for (let i = 1; i < sorted.length; i++) {
-						if (sorted[i].startTime - sorted[i - 1].startTime > 5) trips++;
-					}
-					roundTrips = trips;
-					const t0   = Math.min(...sorted.map((r) => r.startTime));
-					const tMax = Math.max(...sorted.map((r) => r.responseEnd));
-					durationMs = tMax - t0;
-				}
-			} catch {}
 
 			const svg = generateStandardBanner({
 				pkg, version, cdn,
@@ -142,12 +132,18 @@ export async function handleBannerRequest(
 				isError: false,
 				fileCount,
 				roundTrips,
-				durationMs,
 				resources,
 			});
-			return new Response(svg, {
+			const stdResponse = new Response(svg, {
 				headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=3600' },
 			});
+			if (!isLocal) {
+				const cacheUrl = new URL(url.toString());
+				cacheUrl.searchParams.set('bv', BANNER_CACHE_VERSION);
+				const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
+				ctx.waitUntil(cache.put(cacheKey, stdResponse.clone()));
+			}
+			return stdResponse;
 		}
 
 		if (type === 'full') {
@@ -156,8 +152,8 @@ export async function handleBannerRequest(
 				exports.map(async (e) => {
 					let bytes: number | null = null;
 					try {
-						const ms = await getMeasuredSize(pkg, version, e.key, cdn, env);
-						if (ms) bytes = ms.bytes_transfer ?? ms.bytes_raw ?? null;
+						const ms = await getMeasuredSizeFromWaterfall(pkg, version, e.key, cdn, env);
+						if (ms) bytes = ms.bytes_raw ?? null;
 					} catch {}
 					if (bytes === null) {
 						try {

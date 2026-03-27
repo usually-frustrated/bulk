@@ -3,6 +3,15 @@ import { parseExports } from '../utils/cdn';
 import { fetchPackageFiles, expandWildcard } from '../utils/wildcard';
 import { detectFormats } from '../utils/formats';
 
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+/** Collect all direct + peer dependency names from a package.json object. */
+function getExternalDeps(pkgJson: Record<string, unknown>): string[] {
+  const peer = Object.keys((pkgJson.peerDependencies ?? {}) as object);
+  const direct = Object.keys((pkgJson.dependencies ?? {}) as object);
+  return [...new Set([...peer, ...direct])];
+}
+
 // ─── handler ──────────────────────────────────────────────────────────────────
 
 async function fetchPackageMetadata(pkg: string, version: string): Promise<any> {
@@ -77,12 +86,13 @@ export async function handleDiscoverRequest(
           key: stem === 'index' ? 'index' : stem,
           path: `./${file}`,
         }));
-        return Response.json({
+    return Response.json({
           package: pkg,
           version: resolvedVersion,
           exports: fileExports,
           wildcardResolved: false,
           formats,
+          externalDeps: getExternalDeps(pkgJson),
         });
       }
     }
@@ -112,6 +122,7 @@ export async function handleDiscoverRequest(
       exports: [...staticExports, ...uniqueExpanded],
       wildcardResolved: expanded.length > 0,
       formats,
+      externalDeps: getExternalDeps(pkgJson),
     });
   } catch (err: unknown) {
     const status = (err as { status?: number }).status ?? 502;

@@ -2,6 +2,8 @@
 
 > **CRITICAL — ALL AGENTS MUST FOLLOW THIS RULE:**
 > After every session that changes code, discovers new behaviour, finds a bug, or corrects a wrong statement in this file, you MUST update AGENTS.md before pushing. Add new sections, update stale ones, and correct any inaccuracies. This file is the shared memory of the repo.
+>
+> **This rule applies to AGENTS.md itself:** if this file contains anything that no longer reflects the actual code, update it as part of the same commit. AGENTS.md must always be an accurate representation of what is currently true in the repo.
 
 ---
 
@@ -22,7 +24,7 @@ src/handlers/
   bundle-history.ts       ← /_bundle-history/* · all versions → sizes → JSON (legacy; not used by UI anymore)
   versions.ts             ← /_versions/<pkg> · cheap version-list only (NEW)
   discover.ts             ← /_discover/* · package.json export discovery + tarball fallback
-  measurement.ts          ← /_record (POST) · save browser resource timings
+  measurement.ts          ← /_record (POST) · compute round trips · save structural waterfall
   banner.ts               ← /_banner/(compact|standard|full)/<pkg> · real data from DB
   clear-cache.ts          ← /_clear/* · invalidate cached sizes
 src/utils/
@@ -30,7 +32,8 @@ src/utils/
   svg.ts                  ← generateBadgeSvg · generateStandardBanner · generateFullBanner
   size.ts                 ← formatSize(bytes)→"1.2 kB"
   cdn.ts                  ← buildCdnUrl · measureSize(HEAD→GET fallback) · parseExports
-  db.ts                   ← resolveVersion · getPackageExports · getCachedSize · getMeasuredSize · saveSize · getVersionList
+  db.ts                   ← resolveVersion · getPackageExports · getCachedSize · saveSize · getVersionList
+                             · saveWaterfall · getLatestWaterfall · getMeasuredSizeFromWaterfall
   telemetry.ts            ← Telemetry.{info|warn|error|logAsync}
   bundle-parse.ts         ← parseBundlePath("/_bundle/<pkg>[@ver][/export]")
   wildcard.ts             ← fetchPackageFiles · expandWildcard (jsDelivr flat API)
@@ -153,7 +156,7 @@ interface Props {
 | jsdelivr | `cdn.jsdelivr.net/npm/<pkg>@<ver>/+esm` | `cdn.jsdelivr.net/npm/<pkg>@<ver>/<file>/+esm` |
 | unpkg | `unpkg.com/<pkg>@<ver>?module` | `unpkg.com/<pkg>@<ver>/<key>?module` |
 
-**esm.sh `?bundle` is intentional**: without it, esm.sh resolves transitive deps as separate HTTP requests, inflating the waterfall and measurement. `?bundle` collapses everything into one self-contained file.
+**esm.sh `?bundle` is intentional**: without it, esm.sh resolves transitive deps as separate HTTP requests, inflating the waterfall and measurement. `?bundle` collapses non-peer deps into the bundle, but **does NOT bundle peer dependencies** (e.g. react, react-dom) — those still become separate imports.
 
 Server-side CDN URLs (cdn.ts `buildCdnUrl`) do NOT use `?bundle` — those are used for HEAD size measurement only, not browser import.
 
@@ -172,49 +175,89 @@ HEAD → no Content-Length (chunked) → GET → body.byteLength → bytes_raw
 - Injects an importmap + module script into a hidden srcdoc iframe
 - Reads `iframe.contentWindow.performance.getEntriesByType('resource')` after load
 - Annotates primary entry URLs with pkg/version/exportKey
-- Results reported to `/_record` (POST, fire-and-forget) for crowd-sourced P50 data
-- Browser P50 data takes precedence over server HEAD estimates when served from `/_bundle`
+- Results reported to `/_record` (POST, fire-and-forget) for crowd-sourced P50 data; only the annotated (primary) resource is sent — deps are never stored
+**Dependency isolation (externalDeps)**:
+- `/_discover` returns `externalDeps: string[]` (peerDependencies + dependencies names from package.json)
+- `measurePackages` accepts `externalDeps` and adds empty `data:application/javascript,export {};` stubs to the importmap for every dep (and well-known sub-paths like `react/jsx-runtime`, `react-dom/client`)
+- For **esm.sh**: the CDN URL gains `&external=dep1,dep2,...` so the bundled file emits bare-specifier imports instead of absolute CDN URLs — bare specifiers are the only kind the importmap can intercept
+- For **jsDelivr / unpkg**: stubs are added but those CDNs rewrite imports to absolute CDN URLs so stubs have no effect; deps still load (future work)
+- Net result for esm.sh: one network request for the package bundle, zero for its dependencies
+
+**All own-package resources are annotated** (not just the primary entry point): after the primary URL is annotated, `isOwnResource(url, pkg)` is applied to all remaining results to catch CDN chunk files and sub-files belonging to the same package.
+
+**Cached resources are included**: the filter for reporting to `/_record` uses `decodedBodySize > 0` (not `transferSize > 0`), so resources served from browser cache (`transferSize === 0`) are still saved to the waterfall.
 
 ---
 
 ## 🎨 banner SVG (svg.ts + banner.ts)
 
 ### generateBadgeSvg (compact badge)
-Classic two-pill shield. Width auto-sized to text. Height 20px.
-Confidence → pill color: established=green, tentative=yellow, server-estimate=yellow (~prefix), no-data=dark.
+Two-section badge. Width auto-sized to text. Height 20px. Adapts to system theme via `prefers-color-scheme`.
+- Left section (label): `f-panel` background, `f-lbl` text
+- Right section (value): CSS class based on confidence — `f-grn` (established), `f-yel` (tentative/server-estimate), `f-panel` (no-data)
+- Value text: white (`fill="#fff"`) on coloured backgrounds; `f-acc` themed blue for no-data CTA
+- Border: `s-bd` (themed stroke)
+- Flat design; width-scoped clipPath IDs (`bg<W>c`) prevent conflicts when multiple badges share a page
+- `BadgeStats`: `pkgName`, `version`, `format`, `exportCount`, `fileCount`, `roundTrips` (no `durationMs`)
 
 ### generateStandardBanner (standard banner)
-Width 520px. Two layout modes selected by whether `BannerData.resources` is populated:
+Width 520px. Adapts to system theme via `prefers-color-scheme`. Two layout modes:
 
 **Waterfall mode** (when `resources` present):
-- Row 1 (28px, panel bg): `pkg@version` bold + CDN/ESM/UMD pills on right
-- Stats line (18px): size · exports · files · round trips · duration (compact text)
-- Per-resource rows (13px each): filename label (≤22 chars, 145px col) + timed bar (355px track, coloured by round trip)
+- Row 1 (28px, `f-panel` bg): `pkg@version` bold (`f-val`) + CDN/ESM/UMD pills on right
+- Stats line (18px): size (`f-grn`/`f-red`/`f-lbl`) · exports · files · round trips (all `f-lbl`), separator dots `f-bd`
+- Per-resource rows (13px each): filename (`f-val`, ≤18 chars), size (`f-lbl`), byte-proportional bar (CSS colour class by round trip)
+- Resources grouped by pre-computed `roundTrip`; largest file first within each round
 - Total height: `28 + 18 + N×13 + 5`
-- Round-trip bar colours: accent-blue (trip 1) → green → yellow → red
+- Round-trip colours: `f-acc` → `f-grn` → `f-yel` → `f-red`
 
 **Fallback mode** (no `resources`):
-- Row 1 (28px, panel bg): same header
-- Row 2 (36px, dark bg): proportional size bar (bytes/500kB) + stats text
-- Total height: 64px (fixed)
-
-`BannerData` interface:
-- `resources?: BannerResource[]` — per-resource `{url, startTime, responseEnd, transferSize}`
-- `fileCount?`, `roundTrips?`, `durationMs?` — optional aggregated stats for the stats line
+- Row 2 (36px): `f-bd` bar track + `sizeCls` fill bar + stats text
+- Total height: 64px fixed
 
 ### generateFullBanner (full banner)
-Multi-row. Width 520px, Height = 28 + N×22px.
-Header row + one row per export showing key, proportional bar, size.
+Multi-row. Width 520px, Height = 28 + N×22px. Adapts to system theme via `prefers-color-scheme`.
+Header row + one row per export; alternating `f-panel`/`f-bg` row backgrounds.
 
-### banner.ts — real data
-Handler now:
-1. Resolves version via `resolveVersion` (D1 cache 1h, then npm registry)
-2. Fetches export list via `getPackageExports`
-3. Gets size from `getMeasuredSize` (browser P50) → `getCachedSize` (D1) → live `measureSize` (HEAD) in that priority order
-4. **Fetches latest resource timings** via `getLatestResourceTimings(pkg, version, 'index', cdn, env)` — queries the most-recent browser measurement session from `resource_timings` table
-5. Derives `fileCount`, `roundTrips`, `durationMs` from the timing rows and passes `resources` array to `generateStandardBanner` — triggers waterfall SVG layout
-6. Falls back gracefully: partial/null data shows "measuring…" or a placeholder
-7. Returns error banner SVG on exception (never a 5xx, always an SVG)
+### Theme CSS (`THEME_CSS` constant in svg.ts)
+All SVG elements use CSS classes (`f-*` for fill, `s-*` for stroke) instead of inline colour attributes. A single `@media (prefers-color-scheme: light)` block switches the entire palette.
+
+Dark palette (default): `#0d1117` bg / `#161b22` panel / `#30363d` border / `#8b949e` label / `#e6edf3` value / `#58a6ff` acc / `#3fb950` grn / `#d29922` yel / `#f85149` red
+
+Light palette: `#ffffff` bg / `#f6f8fa` panel / `#d0d7de` border / `#57606a` label / `#24292f` value / `#0969da` acc / `#1a7f37` grn / `#9a6700` yel / `#cf222e` red
+
+CSS classes: `f-bg f-panel f-lbl f-val f-bd f-acc f-grn f-yel f-red` (fill) · `s-bd s-acc s-grn s-yel s-red` (stroke)
+
+### banner.ts — DB-only, no live measurements
+
+**Architecture principle**: the banner is a *read-only* view of data already stored in D1.
+All measurements and analysis happen in the bulk website (browser iframe → `/_record`, or
+the `/_bundle` endpoint). The banner never performs live CDN requests.
+
+Handler flow:
+1. Resolves version via `resolveVersion` (D1 cache 1h, then npm registry — read-only, no writes)
+2. Fetches export list via `getPackageExports` (D1 cache, read-only)
+3. **Fetches latest structural waterfall** via `getLatestWaterfall(pkg, version, 'index', cdn, env)` — queries the most-recent session from `package_waterfall` table (pre-computed `round_trip` + `bytes` per resource; no timing)
+4. Derives `bytes` (total) as sum of all waterfall row bytes; derives `fileCount` and `roundTrips` from the waterfall rows
+5. Falls back to `getCachedSize` (server HEAD stored by `/_bundle`) if waterfall has no data yet
+   - If no data at all, `bytes` remains `null` → SVG shows "—" (static, no live fetch)
+   - **No live CDN HEAD requests** — the banner never calls `measureSize`
+6. Passes `resources` array (mapped from waterfall rows) to `generateStandardBanner` — triggers waterfall SVG layout when data is present
+7. Falls back gracefully: missing size → "—" (em dash); missing waterfall → fallback bar layout
+8. Returns error banner SVG on exception (never a 5xx, always an SVG)
+9. For `full` banner: uses `getMeasuredSizeFromWaterfall` per export (P50 of session totals)
+
+**Data flow summary**:
+```
+User measures on bulk website
+  → browser iframe records decodedBodySize → POST /_record
+    → server computes round_trip from startTime gaps
+    → saves to package_waterfall (round_trip, url, bytes) — no raw timing stored
+  → /_bundle call → cdn_sizes table (server-side HEAD estimates)
+Banner reads package_waterfall → renders structural waterfall SVG
+```
+
+**No `isOwnResource` filter in banner.ts**: waterfall rows are already filtered at ingestion time — `/_record` only saves resources with `pkg` annotation set by the client-side `isOwnResource` check in `measurement.ts`.
 
 ---
 
@@ -228,9 +271,16 @@ version_resolution     (package,version,fetched_at)
 resource_timings       (package,version,export_key,cdn,browser,connection,
                          transfer_size,decoded_body_size,start_time,response_end,url,
                          timestamp DEFAULT datetime('now'))
+                        ← LEGACY — no longer written to; kept for historical data only
+package_waterfall      (package,version,export_key,cdn,round_trip,url,bytes,
+                         recorded_at DEFAULT datetime('now'))
+                        ← PRIMARY — structural dependency waterfall, no timing data
+                        ← migration: migrations/0003_package_waterfall.sql
 ```
 
-**`getLatestResourceTimings(pkg, version, exportKey, cdn, env)`** — queries `resource_timings` for all rows at `MAX(timestamp)` (= latest browser session batch). Returns `ResourceTimingRow[]` with `{url, transfer_size, decoded_body_size, start_time, response_end}`. Used by `banner.ts` to render the waterfall SVG. Sessions share a timestamp because batch INSERTs all land in the same SQLite second.
+**`getLatestWaterfall(pkg, version, exportKey, cdn, env)`** — queries `package_waterfall` for all rows where `recorded_at = MAX(recorded_at)` (= latest measurement session). Returns `WaterfallRow[]` with `{round_trip, url, bytes}`. Used by `banner.ts` to render the waterfall SVG. Sessions share a `recorded_at` because batch INSERTs all land in the same SQLite second.
+
+**`getMeasuredSizeFromWaterfall(pkg, version, exportKey, cdn, env)`** — P50 of per-session total decoded bytes. Requires ≥10 sessions; returns `MeasuredSize | null` with `confidence: 'established' | 'tentative'`.
 
 ---
 
