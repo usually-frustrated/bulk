@@ -58,15 +58,17 @@ function parseInput(input: string): { pkg: string; exportKey: string } {
 export function App() {
 	// ── Inputs ─────────────────────────────────────────────────────────────────
 
-	const initialPkg = getQueryParam('pkg') ?? 'react';
-	const initialExport = getQueryParam('export');
+	const initialPkg    = getQueryParam('pkg')    ?? 'react';
+	const initialExport = getQueryParam('export') ?? '';
+	const initialCdn    = (getQueryParam('cdn')    ?? 'jsdelivr') as CDN;
+	const initialFormat = getQueryParam('format') ?? 'esm';
 
 	// pkgInput = live text-field value
 	// pkg      = committed value (only updates when the user clicks check)
 	const [pkgInput, setPkgInput] = createSignal(initialPkg);
 	const [pkg, setPkg] = createSignal(initialPkg);
-	const [cdn, setCdn] = createSignal<CDN>('jsdelivr');
-	const [format, setFormat] = createSignal('esm');
+	const [cdn, setCdn] = createSignal<CDN>(initialCdn);
+	const [format, setFormat] = createSignal(initialFormat);
 
 	// Derived: committed package name only (no export suffix)
 	const firstPkg = () => parseInput(pkg()).pkg;
@@ -78,17 +80,16 @@ export function App() {
 		setPkg(pkgInput());
 	}
 
-	// ── URL sync (pkg) ──────────────────────────────────────────────────────────
+	// ── URL sync (all controls) ─────────────────────────────────────────────────
 	// Called explicitly inside handleMeasure — URL only changes on button click.
+	// Omits params that equal their defaults so the URL stays clean.
 
-	function syncPkgParam(p: string) {
-		const params = new URLSearchParams(window.location.search);
-		if (p && p !== 'react') {
-			params.set('pkg', p);
-		} else {
-			params.delete('pkg');
-		}
-		params.delete('export');
+	function syncAllParams(p: string, cdnVal: CDN, exportVal: string, formatVal: string) {
+		const params = new URLSearchParams();
+		if (p && p !== 'react')        params.set('pkg',    p);
+		if (cdnVal !== 'jsdelivr')     params.set('cdn',    cdnVal);
+		if (exportVal)                 params.set('export', exportVal);
+		if (formatVal !== 'esm')       params.set('format', formatVal);
 		const qs = params.toString();
 		history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
 	}
@@ -111,7 +112,7 @@ export function App() {
 
 	// ── Export selection ────────────────────────────────────────────────────────
 
-	const [selectedExport, setSelectedExport] = createSignal(initialExport ?? '');
+	const [selectedExport, setSelectedExport] = createSignal(initialExport);
 
 	// When the committed package actually changes (not just re-committed), reset export + discover data + results.
 	let lastPkg = firstPkg();
@@ -159,7 +160,7 @@ export function App() {
 		commitPkg();
 		const pkgName = parseInput(pkgInput()).pkg;
 		if (!pkgName) return;
-		syncPkgParam(pkgName);
+		syncAllParams(pkgName, cdn(), selectedExport(), format());
 
 		batch(() => {
 			setMeasuring(true);
