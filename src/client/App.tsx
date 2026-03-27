@@ -29,6 +29,7 @@ interface DiscoverResult {
 	exports:          { key: string; path: string }[];
 	wildcardResolved: boolean;
 	formats:          DetectedFormats;
+	externalDeps:     string[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -195,7 +196,7 @@ export function App() {
 			const formatPath = selectedFormat !== 'esm'
 				? (formats as Record<string, string | null>)[selectedFormat] ?? null
 				: null;
-			const rawResources = await measurePackages(entries, selectedCdn, selectedFormat, formatPath);
+			const rawResources = await measurePackages(entries, selectedCdn, selectedFormat, formatPath, dr.externalDeps ?? []);
 
 			// 4. Report to /_record (fire-and-forget)
 			const annotated = rawResources.filter(

@@ -174,8 +174,15 @@ HEAD → no Content-Length (chunked) → GET → body.byteLength → bytes_raw
 - Injects an importmap + module script into a hidden srcdoc iframe
 - Reads `iframe.contentWindow.performance.getEntriesByType('resource')` after load
 - Annotates primary entry URLs with pkg/version/exportKey
-- Results reported to `/_record` (POST, fire-and-forget) for crowd-sourced P50 data
+- Results reported to `/_record` (POST, fire-and-forget) for crowd-sourced P50 data; only the annotated (primary) resource is sent — deps are never stored
 - Browser P50 data takes precedence over server HEAD estimates when served from `/_bundle`
+
+**Dependency isolation (externalDeps)**:
+- `/_discover` returns `externalDeps: string[]` (peerDependencies + dependencies names from package.json)
+- `measurePackages` accepts `externalDeps` and adds empty `data:application/javascript,export {};` stubs to the importmap for every dep (and well-known sub-paths like `react/jsx-runtime`, `react-dom/client`)
+- For **esm.sh**: the CDN URL gains `&external=dep1,dep2,...` so the bundled file emits bare-specifier imports instead of absolute CDN URLs — bare specifiers are the only kind the importmap can intercept
+- For **jsDelivr / unpkg**: stubs are added but those CDNs rewrite imports to absolute CDN URLs so stubs have no effect; deps still load (future work)
+- Net result for esm.sh: one network request for the package bundle, zero for its dependencies
 
 ---
 
