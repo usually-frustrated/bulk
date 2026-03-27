@@ -21,6 +21,13 @@
 	align-items: flex-end;
 }
 
+.controlsRow {
+	display: flex;
+	gap: var(--spacing-row-gap);
+	align-items: flex-end;
+	margin-top: 0.9rem;
+}
+
 .inputGroup {
 	flex: 1 1 auto;
 	min-width: 0;

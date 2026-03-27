@@ -4,6 +4,8 @@ import { generateStandardBanner, generateFullBanner, generateBadgeSvg, formatSiz
 import { resolveVersion, getPackageExports, getCachedSize, getMeasuredSizeFromWaterfall, getLatestWaterfall } from '../utils/db';
 import type { CDN } from '../utils/cdn';
 
+// Bump to globally invalidate all banner caches on deployment.
+export const BANNER_CACHE_VERSION = 'v1';
 
 export async function handleBannerRequest(
 	request: Request,
@@ -46,6 +48,19 @@ export async function handleBannerRequest(
 
 	const cdn: CDN = (url.searchParams.get('cdn') as CDN | null) ?? 'jsdelivr';
 	let version = versionHint;
+
+	const isLocal = url.hostname === 'localhost';
+	const cache = caches.default;
+
+	// For standard banners: check explicit cache first. The record handler purges
+	// this same cache key whenever new waterfall data is saved for the package.
+	if (!isLocal && type === 'standard') {
+		const cacheUrl = new URL(url.toString());
+		cacheUrl.searchParams.set('bv', BANNER_CACHE_VERSION);
+		const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
+		const cached = await cache.match(cacheKey);
+		if (cached) return cached;
+	}
 
 	try {
 		// Resolve version
@@ -119,9 +134,16 @@ export async function handleBannerRequest(
 				roundTrips,
 				resources,
 			});
-			return new Response(svg, {
+			const stdResponse = new Response(svg, {
 				headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=3600' },
 			});
+			if (!isLocal) {
+				const cacheUrl = new URL(url.toString());
+				cacheUrl.searchParams.set('bv', BANNER_CACHE_VERSION);
+				const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
+				ctx.waitUntil(cache.put(cacheKey, stdResponse.clone()));
+			}
+			return stdResponse;
 		}
 
 		if (type === 'full') {

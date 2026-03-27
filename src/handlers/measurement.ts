@@ -3,6 +3,7 @@ import { CDNS } from '../utils/cdn';
 import type { CDN } from '../utils/cdn';
 import { saveWaterfall } from '../utils/db';
 import type { WaterfallRow } from '../utils/db';
+import { BANNER_CACHE_VERSION } from './banner';
 
 // ─── Measurement result types ────────────────────────────────────────────────
 
@@ -73,6 +74,16 @@ export async function handleRecordRequest(
 				// the client-side annotation; use the first to key the waterfall row.
 				const first = sorted[0];
 				await saveWaterfall(first.pkg, first.version, first.exportKey, body.cdn as CDN, rows, env);
+
+				// Purge the cached banner SVG for this pkg/version/cdn so the next
+				// request generates a fresh one with the newly recorded waterfall data.
+				try {
+					const origin = new URL(request.url).origin;
+					const cdnParam = body.cdn !== 'jsdelivr' ? `?cdn=${encodeURIComponent(body.cdn)}` : '';
+					const bannerUrl = new URL(`${origin}/_banner/standard/${first.pkg}@${first.version}${cdnParam}`);
+					bannerUrl.searchParams.set('bv', BANNER_CACHE_VERSION);
+					await caches.default.delete(new Request(bannerUrl.toString()));
+				} catch {}
 			})());
 		}
 

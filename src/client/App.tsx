@@ -234,11 +234,11 @@ export function App() {
 	// ── Banner copy ────────────────────────────────────────────────────────────
 	const [copyBannerText, setCopyBannerText] = createSignal('copy url');
 	const copyBannerUrl = async () => {
-		const pkg = firstPkg() || 'zustand';
+		const p = firstPkg() || 'zustand';
 		const ver = measuredEntries()?.[0]?.version;
-		const cdn = measuredCdn();
-		const pkgAt = ver ? `${pkg}@${ver}` : pkg;
-		const cdnParam = cdn && cdn !== 'jsdelivr' ? `?cdn=${encodeURIComponent(cdn)}` : '';
+		const selectedCdn = cdn();
+		const pkgAt = ver ? `${p}@${ver}` : p;
+		const cdnParam = selectedCdn && selectedCdn !== 'jsdelivr' ? `?cdn=${encodeURIComponent(selectedCdn)}` : '';
 		const url = `${window.location.origin}/_banner/standard/${pkgAt}${cdnParam}`;
 		try {
 			await navigator.clipboard.writeText(url);
@@ -273,6 +273,21 @@ export function App() {
 							/>
 						</div>
 
+						<button
+							classList={{ [styles.runBtn]: true, [styles.runBtnDirty]: isDirty() }}
+							onClick={handleMeasure}
+							disabled={measuring() || !isDirty()}
+							aria-label="measure"
+						>&#x25B6; check</button>
+						<button
+							class={styles.revertBtn}
+							onClick={revertInputs}
+							title="revert changes"
+							disabled={!isDirty() || measuredInput() === null}
+						>&#x21A9;</button>
+					</div>
+
+					<div class={styles.controlsRow}>
 						<div class={styles.exportGroup}>
 							<label class={styles.inputLabel}>export</label>
 							<select
@@ -326,19 +341,6 @@ export function App() {
 								<option value="systemjs" disabled={!discoverData()?.formats?.systemjs}>SystemJS</option>
 							</select>
 						</div>
-
-						<button
-							classList={{ [styles.runBtn]: true, [styles.runBtnDirty]: isDirty() }}
-							onClick={handleMeasure}
-							disabled={measuring() || !isDirty()}
-							aria-label="measure"
-						>&#x25B6; check</button>
-						<button
-							class={styles.revertBtn}
-							onClick={revertInputs}
-							title="revert changes"
-							disabled={!isDirty() || measuredInput() === null}
-						>&#x21A9;</button>
 					</div>
 				</div>
 
@@ -377,7 +379,7 @@ export function App() {
 						<BadgeGenerator
 							pkg={firstPkg}
 							version={() => measuredEntries()?.[0]?.version ?? ''}
-							cdn={() => measuredCdn()}
+							cdn={cdn}
 							format={() => measuredFormat()}
 						/>
 					</div>
