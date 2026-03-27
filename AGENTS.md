@@ -74,10 +74,11 @@ wrangler.jsonc            ← main=src/index.ts · assets=./public · D1 binding
 /_clear/<pkg>                       → handleClearCache
 
 ── Catch-all ─────────────────────────────────────────────────────────────────
-/*                                  → handleBadgeRequest    (SVG size badge)
+/<pkg>[@ver][?cdn=jsdelivr|unpkg|esm.sh]  → handleBadgeRequest  (SVG size badge)
 ```
 Key ordering rule: `/_bundle-history/` before `/_bundle/`; `/_versions/` between them.
 Static assets `/_/` are checked before any API route.
+**No `/:provider/:package` path format** — CDN is selected via `?cdn=` query param only (default: jsdelivr).
 
 ---
 
@@ -89,16 +90,29 @@ pkgInput    (draft)     ← updated on every keystroke via onInput
 pkg         (committed) ← updated only when user clicks "check" (handleMeasure)
 cdn                     ← 'jsdelivr' | 'esm.sh' | 'unpkg'
 selectedExport          ← '' (index) or export key string
+format                  ← 'esm' | 'umd' | 'cjs' | 'iife' | 'systemjs'
 measuredInput           ← pkgInput value at last successful measurement (null = never run)
 measuredCdn             ← cdn at last measurement
 measuredExport          ← selectedExport at last measurement
+measuredFormat          ← format at last measurement
 ```
 
 ### Derived dirty flags
 ```
-isDirty    = measuredInput===null || pkgInput!==measuredInput || cdn!==measuredCdn || selectedExport!==measuredExport
+isDirty    = measuredInput===null || pkgInput!==measuredInput || cdn!==measuredCdn || selectedExport!==measuredExport || format!==measuredFormat
 inputDirty = pkgInput !== pkg   ← text field changed since last commit; used to disable export dropdown
 ```
+
+### URL query param sync
+All four controls are reflected in the URL on every "check" click (via `syncAllParams`).
+Defaults are omitted to keep the URL clean:
+```
+?pkg=<name>      omitted when pkg === 'react'
+?cdn=<cdn>       omitted when cdn === 'jsdelivr'
+?export=<key>    omitted when export === '' (index)
+?format=<fmt>    omitted when format === 'esm'
+```
+On page load, all four are restored from URL params so a refresh never loses state.
 
 ### Dirty-state UI behaviour
 - Export dropdown disabled when `inputDirty()` (exports list is stale for a new pkg)
@@ -172,20 +186,27 @@ HEAD → no Content-Length (chunked) → GET → body.byteLength → bytes_raw
 ```
 
 ### Browser-side (measurement.ts `measurePackages`)
-- Injects an importmap + module script into a hidden srcdoc iframe
-- Reads `iframe.contentWindow.performance.getEntriesByType('resource')` after load
-- Annotates primary entry URLs with pkg/version/exportKey
-- Results reported to `/_record` (POST, fire-and-forget) for crowd-sourced P50 data; only the annotated (primary) resource is sent — deps are never stored
+
+**One measurement baseline for all formats/CDNs:**
+
+| Format | Mechanism | Why |
+|--------|-----------|-----|
+| ESM (all CDNs) | `<script type="importmap">` + `<script type="module">` with dynamic `import()` | Module scripts are implicitly CORS; `decodedBodySize` is always exposed |
+| UMD / CJS / IIFE / SystemJS | `fetch(url).then(r => r.blob())` | Classic `<script>` is no-CORS, zeroing `decodedBodySize` even with `Timing-Allow-Origin: *`; `fetch()` is CORS by default, jsDelivr responds with `Access-Control-Allow-Origin: *` |
+
+**Never use classic `<script src>` for bundle measurement** — no-CORS requests expose zero size data in the Performance API regardless of server headers. `fetch()` is the single reliable baseline.
+
+After measurement:
+- `performance.getEntriesByType('resource')` is read from the iframe
+- Primary resource annotated by exact URL match; remaining own-package resources by `isOwnResource(url, pkg)`
+- `ownResources = rawResources.filter(r => r.pkg !== undefined)` — only own-package resources passed to `WaterfallBanner`, preventing transitive CDN deps from appearing in the SVG
+- Results reported to `/_record` (POST, fire-and-forget); only annotated resources with `decodedBodySize > 0` are sent
+
 **Dependency isolation (externalDeps)**:
 - `/_discover` returns `externalDeps: string[]` (peerDependencies + dependencies names from package.json)
-- `measurePackages` accepts `externalDeps` and adds empty `data:application/javascript,export {};` stubs to the importmap for every dep (and well-known sub-paths like `react/jsx-runtime`, `react-dom/client`)
-- For **esm.sh**: the CDN URL gains `&external=dep1,dep2,...` so the bundled file emits bare-specifier imports instead of absolute CDN URLs — bare specifiers are the only kind the importmap can intercept
-- For **jsDelivr / unpkg**: stubs are added but those CDNs rewrite imports to absolute CDN URLs so stubs have no effect; deps still load (future work)
-- Net result for esm.sh: one network request for the package bundle, zero for its dependencies
-
-**All own-package resources are annotated** (not just the primary entry point): after the primary URL is annotated, `isOwnResource(url, pkg)` is applied to all remaining results to catch CDN chunk files and sub-files belonging to the same package.
-
-**Cached resources are included**: the filter for reporting to `/_record` uses `decodedBodySize > 0` (not `transferSize > 0`), so resources served from browser cache (`transferSize === 0`) are still saved to the waterfall.
+- `measurePackages` stubs every dep with `data:application/javascript,export {};` in the importmap
+- For **esm.sh**: CDN URL gains `&external=dep1,dep2,...` so the bundle emits bare-specifier imports that the importmap can intercept → zero dep network requests
+- For **jsDelivr / unpkg**: stubs are added but CDNs rewrite imports to absolute URLs → stubs have no effect; the `ownResources` filter ensures those dep requests are excluded from the waterfall display
 
 ---
 

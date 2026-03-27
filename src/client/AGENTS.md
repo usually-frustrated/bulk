@@ -8,22 +8,30 @@ pkgInput  (draft)     — live text field value, updated on every keystroke
 pkg       (committed) — updated only on "check" click via commitPkg()
 cdn                   — 'jsdelivr' | 'esm.sh' | 'unpkg'
 selectedExport        — '' (index) or export key string (e.g. 'jsx-runtime')
+format                — 'esm' | 'umd' | 'cjs' | 'iife' | 'systemjs'
 discoverData          — DiscoverResult | null — populated by handleMeasure
-measuredInput / measuredCdn / measuredExport  — snapshot at last successful measurement
+measuredInput / measuredCdn / measuredExport / measuredFormat  — snapshot at last successful measurement
 ```
+
+### URL query param sync
+`syncAllParams(pkg, cdn, export, format)` is called on every "check" click.
+Defaults are omitted: pkg='react', cdn='jsdelivr', export='', format='esm'.
+All four params are read back on initial load so a page refresh restores full state.
 
 ### Dirty flags
 ```
-isDirty    = measuredInput===null || pkgInput!==measuredInput || cdn!==measuredCdn || selectedExport!==measuredExport
+isDirty    = measuredInput===null || pkgInput!==measuredInput || cdn!==measuredCdn || selectedExport!==measuredExport || format!==measuredFormat
 inputDirty = pkgInput !== pkg   (disables export dropdown when package text has changed)
 ```
 
 ### handleMeasure flow
 1. `commitPkg()` → `pkg = pkgInput()`
-2. **Discover skip:** if `discoverData()?.package === pkgName`, reuse existing data — do NOT call `setDiscoverData`. This keeps the `<For>`-rendered `<option>` list stable, preserving the controlled `<select>` value. Only fetch `/_discover` when switching to a new package.
-3. `measurePackages(entries, cdn)` — runs iframe measurement
-4. Fire-and-forget `/_record` POST with annotated resources
-5. Batch-set `measuredInput/Cdn/Export/Entries/Resources`
+2. `syncAllParams(pkg, cdn, export, format)` — write all controls to URL
+3. **Discover skip:** if `discoverData()?.package === pkgName`, reuse existing data — do NOT call `setDiscoverData`. This keeps the `<For>`-rendered `<option>` list stable, preserving the controlled `<select>` value. Only fetch `/_discover` when switching to a new package.
+4. `measurePackages(entries, cdn, format, formatPath, externalDeps)` — runs iframe measurement
+5. Fire-and-forget `/_record` POST with annotated resources (only `r.pkg` set + `decodedBodySize > 0`)
+6. `ownResources = rawResources.filter(r => r.pkg !== undefined)` — exclude transitive deps
+7. Batch-set `measuredInput/Cdn/Export/Format/Entries/Resources`
 
 ### Export dropdown — SolidJS gotcha
 `<select value={selectedExport()}>` relies on SolidJS reactively setting `el.value`.
@@ -77,9 +85,11 @@ Copy-URL buttons. Dimmed when `isDirty()`.
 
 ## utils/measurement.ts
 
-`measurePackages(entries, cdn)` — injects importmap + module script into srcdoc iframe,
-waits for `load` event, reads `performance.getEntriesByType('resource')`, annotates
-entries with pkg/version/exportKey. Returns `ResourceTimingEntry[]`.
+`measurePackages(entries, cdn, format, formatPath, externalDeps)` — measures bundle size in a hidden srcdoc iframe, reads `performance.getEntriesByType('resource')`, annotates entries with pkg/version/exportKey.
+
+**Measurement baseline (applies to ALL formats and CDNs):**
+- **ESM**: `<script type="importmap">` + `<script type="module">` with dynamic `import()`. Module scripts are CORS by default → `decodedBodySize` always exposed.
+- **Non-ESM (UMD/CJS/IIFE/SystemJS)**: `fetch(url).then(r => r.blob())`. `fetch()` is CORS by default; jsDelivr returns `Access-Control-Allow-Origin: *`. **Never use classic `<script src>` for measurement** — no-CORS requests zero out `decodedBodySize` even with `Timing-Allow-Origin: *`.
 
 `getBrowserInfo()` / `getConnectionInfo()` — navigator UA + connection type strings.
 

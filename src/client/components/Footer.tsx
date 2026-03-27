@@ -7,10 +7,7 @@ export function Footer() {
 				<span class={styles.apiLabel}>API</span>
 				<div class={styles.apiRoutes}>
 					<code>/:package</code>
-					<code>/:provider/:package</code>
-				</div>
-				<div class={styles.providers}>
-					jsdelivr&ensp;•&ensp;unpkg&ensp;•&ensp;esm.sh&ensp;•&ensp;skypack
+					<code>/:package?cdn=jsdelivr|unpkg|esm.sh</code>
 				</div>
 			</div>
 			<div class={styles.links}>
