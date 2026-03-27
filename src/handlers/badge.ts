@@ -1,6 +1,6 @@
 import { formatSize } from '../utils/size';
 import { generateBadgeSvg, type BadgeStats } from '../utils/svg';
-import { buildCacheControl, parsePath, type ParsedPath } from '../utils/pkg';
+import { buildCacheControl, parsePath } from '../utils/pkg';
 import { getProvider, getDefaultProvider, type Provider } from '../providers';
 import { Telemetry } from '../utils/telemetry';
 import { resolveVersion, getMeasuredSizeFromWaterfall, getPackageExports, getLatestWaterfall } from '../utils/db';
@@ -104,7 +104,8 @@ export async function handleBadgeRequest(request: Request, env: Env, ctx: Execut
 		return Response.redirect('/', 302);
 	}
 
-	const { provider: providerId, pkg } = parsed;
+	const { pkg } = parsed;
+	const providerId = url.searchParams.get('cdn') ?? 'jsdelivr';
 	const provider = getProvider(providerId) || getDefaultProvider();
 
 	// Check for force refresh parameter
