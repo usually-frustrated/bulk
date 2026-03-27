@@ -215,8 +215,15 @@ export function App() {
 				}).catch(() => {});
 			}
 
+			// Only show own-package resources in the waterfall.  For jsDelivr,
+			// dependencies are loaded via absolute CDN URLs which the importmap
+			// cannot intercept, so transitive deps appear as separate requests.
+			// Filtering to annotated (own-package) resources gives consistent
+			// behaviour across all CDNs (mirrors esm.sh's ?bundle output).
+			const ownResources = rawResources.filter(r => r.pkg !== undefined);
+
 			batch(() => {
-				setResources(rawResources);
+				setResources(ownResources);
 				setMeasuredEntries(entries);
 				setMeasuredCdn(selectedCdn);
 				setMeasuredFormat(selectedFormat);
