@@ -13,20 +13,69 @@ function tw(s: string) {
 	return Math.ceil(s.length * CHAR_W);
 }
 
-// ─── palette ─────────────────────────────────────────────────────────────────
+// ─── palette ──────────────────────────────────────────────────────────────────
+// Dark is the default; light palette activates via prefers-color-scheme.
+// Accent colours use darker shades in light mode for WCAG contrast.
 
-const C = {
-	bg:       '#0d1117', // GitHub dark bg
-	panel:    '#161b22', // slightly lighter
-	border:   '#30363d',
-	label:    '#8b949e', // muted text
-	value:    '#e6edf3', // primary text
-	accent:   '#58a6ff', // blue accent
-	green:    '#3fb950',
-	yellow:   '#d29922',
-	red:      '#f85149',
-	pill_bg:  '#21262d',
+const D = { // dark
+	bg:     '#0d1117',
+	panel:  '#161b22',
+	border: '#30363d',
+	label:  '#8b949e',
+	value:  '#e6edf3',
+	acc:    '#58a6ff',
+	grn:    '#3fb950',
+	yel:    '#d29922',
+	red:    '#f85149',
 };
+const L = { // light
+	bg:     '#ffffff',
+	panel:  '#f6f8fa',
+	border: '#d0d7de',
+	label:  '#57606a',
+	value:  '#24292f',
+	acc:    '#0969da',
+	grn:    '#1a7f37',
+	yel:    '#9a6700',
+	red:    '#cf222e',
+};
+
+// ─── theme CSS ────────────────────────────────────────────────────────────────
+// f-* classes set fill; s-* classes set stroke.
+// All SVG elements use these classes instead of inline fill/stroke attributes
+// so a single media-query block switches the full palette.
+
+const THEME_CSS = `
+  .f-bg    { fill: ${D.bg} }
+  .f-panel { fill: ${D.panel} }
+  .f-lbl   { fill: ${D.label} }
+  .f-val   { fill: ${D.value} }
+  .f-bd    { fill: ${D.border} }
+  .f-acc   { fill: ${D.acc} }
+  .f-grn   { fill: ${D.grn} }
+  .f-yel   { fill: ${D.yel} }
+  .f-red   { fill: ${D.red} }
+  .s-bd    { stroke: ${D.border} }
+  .s-acc   { stroke: ${D.acc} }
+  .s-grn   { stroke: ${D.grn} }
+  .s-yel   { stroke: ${D.yel} }
+  .s-red   { stroke: ${D.red} }
+  @media (prefers-color-scheme: light) {
+    .f-bg    { fill: ${L.bg} }
+    .f-panel { fill: ${L.panel} }
+    .f-lbl   { fill: ${L.label} }
+    .f-val   { fill: ${L.value} }
+    .f-bd    { fill: ${L.border} }
+    .f-acc   { fill: ${L.acc} }
+    .f-grn   { fill: ${L.grn} }
+    .f-yel   { fill: ${L.yel} }
+    .f-red   { fill: ${L.red} }
+    .s-bd    { stroke: ${L.border} }
+    .s-acc   { stroke: ${L.acc} }
+    .s-grn   { stroke: ${L.grn} }
+    .s-yel   { stroke: ${L.yel} }
+    .s-red   { stroke: ${L.red} }
+  }`.trim();
 
 function esc(s: string): string {
 	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -35,12 +84,10 @@ function esc(s: string): string {
 // ─── 1. COMPACT BADGE ────────────────────────────────────────────────────────
 // Wide two-pill shield showing size + optional browser timing stats.
 //
-//   established    → green pill
-//   tentative      → yellow pill,  value + asterisk
-//   server-estimate→ yellow pill,  tilde-prefixed value
-//   no-data        → dark pill,    "measure →" CTA
-//
-// Right pill text: "11.4 kB  ·  5 exports  ·  1 file  ·  1 round trip  ·  111 ms"
+//   established    → green right pill
+//   tentative      → yellow right pill, value + asterisk
+//   server-estimate→ yellow right pill, tilde-prefixed value
+//   no-data        → panel-colour right pill, "measure →" CTA in accent
 //
 // Use: ![](https://bulk.frustrated.dev/jsdelivr/zustand)
 
@@ -60,16 +107,15 @@ export function generateBadgeSvg(
 	stats?: BadgeStats,
 ): string {
 	let baseValue: string;
-	let vc: string;
+	let vcCls: string; // CSS class for value-section background fill
 
 	switch (confidence) {
-		case 'established':    baseValue = value;             vc = C.green;   break;
-		case 'tentative':      baseValue = `${value} *`;     vc = C.yellow;  break;
-		case 'server-estimate':baseValue = `~${value}`;      vc = C.yellow;  break;
-		case 'no-data':        baseValue = 'measure \u2192'; vc = C.pill_bg; break;
+		case 'established':     baseValue = value;             vcCls = 'f-grn';   break;
+		case 'tentative':       baseValue = `${value} *`;      vcCls = 'f-yel';   break;
+		case 'server-estimate': baseValue = `~${value}`;       vcCls = 'f-yel';   break;
+		case 'no-data':         baseValue = 'measure \u2192';  vcCls = 'f-panel'; break;
 	}
 
-	// Build right-side text from stats parts
 	const pkgId = stats?.pkgName
 		? stats.version ? `${stats.pkgName}@${stats.version}` : stats.pkgName
 		: null;
@@ -87,30 +133,32 @@ export function generateBadgeSvg(
 	const W  = lw + vw;
 	const lx = lw / 2;
 	const vx = lw + vw / 2;
-	const vtextFill = confidence === 'no-data' ? C.accent : '#fff';
-	// Width-scoped clipPath ID avoids conflicts when multiple badges appear in the same document
+	// Value text: white on coloured backgrounds; themed accent for no-data CTA
+	const vtextAttr = confidence === 'no-data' ? 'class="f-acc"' : 'fill="#fff"';
+	// Width-scoped clipPath ID avoids conflicts when multiple badges share a page
 	const uid = `bg${W}`;
 
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(label)}: ${esc(displayValue)}">
   <title>${esc(label)}: ${esc(displayValue)}</title>
+  <style>${THEME_CSS}</style>
   <defs>
     <clipPath id="${uid}c"><rect width="${W}" height="${H}" rx="${R}" fill="#fff"/></clipPath>
   </defs>
   <g clip-path="url(#${uid}c)">
-    <rect width="${W}" height="${H}" fill="${C.panel}"/>
-    <rect x="${lw}" width="${vw}" height="${H}" fill="${vc}"/>
+    <rect width="${W}" height="${H}" class="f-panel"/>
+    <rect x="${lw}" width="${vw}" height="${H}" class="${vcCls}"/>
   </g>
-  <rect width="${W}" height="${H}" rx="${R}" fill="none" stroke="${C.border}" stroke-width=".8"/>
+  <rect width="${W}" height="${H}" rx="${R}" fill="none" class="s-bd" stroke-width=".8"/>
   <g text-anchor="middle" font-family="${FONT}" font-size="11">
-    <text x="${lx}" y="14" fill="${C.label}">${esc(label)}</text>
-    <text x="${vx}" y="14" fill="${vtextFill}">${esc(displayValue)}</text>
+    <text x="${lx}" y="14" class="f-lbl">${esc(label)}</text>
+    <text x="${vx}" y="14" ${vtextAttr}>${esc(displayValue)}</text>
   </g>
 </svg>`.trim();
 }
 
 // ─── 2. STANDARD INFO BANNER ─────────────────────────────────────────────────
 // Two-row dark banner with waterfall-style stats
-// Width: 520px  Height: 64px
+// Width: 520px  Height: 64px (fallback) or dynamic (waterfall)
 // Use: ![](https://bulk.frustrated.dev/_banner/standard/zustand)
 
 export interface BannerResource {
@@ -156,15 +204,15 @@ export function generateStandardBanner(d: BannerData): string {
 	const sizeStr = d.isError        ? (d.errorMsg ?? 'error')
 	              : d.bytes === null  ? '—'
 	              : formatSize(d.bytes);
-	const sizeCol = d.isError        ? C.red
-	              : d.bytes === null  ? C.label
-	              : C.green;
+	const sizeCls = d.isError        ? 'f-red'
+	              : d.bytes === null  ? 'f-lbl'
+	              : 'f-grn';
 
 	// ── header pills (CDN, ESM, UMD) ────────────────────────────────────────
-	const pills: Array<{ text: string; color: string }> = [
-		{ text: d.cdn, color: C.accent },
-		...(d.hasEsm ? [{ text: 'ESM', color: C.green }] : []),
-		...(d.hasUmd ? [{ text: 'UMD', color: C.yellow }] : [{ text: 'no UMD', color: C.red }]),
+	const pills: Array<{ text: string; key: 'acc' | 'grn' | 'yel' | 'red' }> = [
+		{ text: d.cdn, key: 'acc' },
+		...(d.hasEsm ? [{ text: 'ESM', key: 'grn' as const }] : []),
+		...(d.hasUmd ? [{ text: 'UMD', key: 'yel' as const }] : [{ text: 'no UMD', key: 'red' as const }]),
 	];
 	let pillX = W - PAD;
 	const pillEls: string[] = [];
@@ -172,8 +220,8 @@ export function generateStandardBanner(d: BannerData): string {
 		const pw = tw(p.text) + 12;
 		pillX -= pw + 4;
 		pillEls.unshift(`
-  <rect x="${pillX}" y="6" width="${pw}" height="16" rx="3" fill="${p.color}" fill-opacity=".18" stroke="${p.color}" stroke-width=".5"/>
-  <text x="${pillX + pw / 2}" y="18" text-anchor="middle" font-size="10" fill="${p.color}" font-family="${FONT}">${esc(p.text)}</text>`);
+  <rect x="${pillX}" y="6" width="${pw}" height="16" rx="3" class="f-${p.key} s-${p.key}" fill-opacity=".18" stroke-width=".5"/>
+  <text x="${pillX + pw / 2}" y="18" text-anchor="middle" font-size="10" class="f-${p.key}" font-family="${FONT}">${esc(p.text)}</text>`);
 	}
 
 	const pkgLabel = esc(d.pkg);
@@ -184,11 +232,11 @@ export function generateStandardBanner(d: BannerData): string {
 	const filesLabel   = d.fileCount  != null ? `${d.fileCount} file${d.fileCount !== 1 ? 's' : ''}` : null;
 	const tripsLabel   = d.roundTrips != null ? `${d.roundTrips} round trip${d.roundTrips !== 1 ? 's' : ''}` : null;
 
-	const statItems: Array<{ label: string; color: string }> = [
-		{ label: sizeStr, color: sizeCol },
-		{ label: exportsLabel, color: C.label },
-		...(filesLabel ? [{ label: filesLabel, color: C.label }] : []),
-		...(tripsLabel ? [{ label: tripsLabel, color: C.label }] : []),
+	const statItems: Array<{ label: string; cls: string }> = [
+		{ label: sizeStr,      cls: sizeCls },
+		{ label: exportsLabel, cls: 'f-lbl' },
+		...(filesLabel ? [{ label: filesLabel, cls: 'f-lbl' }] : []),
+		...(tripsLabel ? [{ label: tripsLabel, cls: 'f-lbl' }] : []),
 	];
 
 	function renderStatLine(y: number): string {
@@ -196,10 +244,10 @@ export function generateStandardBanner(d: BannerData): string {
 		const els: string[] = [];
 		for (let i = 0; i < statItems.length; i++) {
 			const s = statItems[i];
-			els.push(`<text x="${x}" y="${y}" font-family="${FONT}" font-size="10" fill="${s.color}">${esc(s.label)}</text>`);
+			els.push(`<text x="${x}" y="${y}" font-family="${FONT}" font-size="10" class="${s.cls}">${esc(s.label)}</text>`);
 			x += tw(s.label) + 6;
 			if (i < statItems.length - 1) {
-				els.push(`<text x="${x}" y="${y}" font-family="${FONT}" font-size="10" fill="${C.border}">·</text>`);
+				els.push(`<text x="${x}" y="${y}" font-family="${FONT}" font-size="10" class="f-bd">·</text>`);
 				x += tw('·') + 6;
 			}
 		}
@@ -208,15 +256,16 @@ export function generateStandardBanner(d: BannerData): string {
 
 	const svgHeader = (H: number) => `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(d.pkg)} ${sizeStr}">
   <title>${esc(d.pkg)}@${esc(d.version)} · ${esc(d.cdn)} · ${esc(sizeStr)}</title>
+  <style>${THEME_CSS}</style>
   <!-- card background -->
-  <rect width="${W}" height="${H}" rx="${R}" fill="${C.bg}"/>
-  <rect width="${W}" height="${H}" rx="${R}" fill="none" stroke="${C.border}" stroke-width="1"/>
+  <rect width="${W}" height="${H}" rx="${R}" class="f-bg"/>
+  <rect width="${W}" height="${H}" rx="${R}" fill="none" class="s-bd" stroke-width="1"/>
   <!-- header band -->
-  <rect width="${W}" height="${H1}" rx="${R}" fill="${C.panel}"/>
-  <rect y="${H1 - R}" width="${W}" height="${R}" fill="${C.panel}"/>
-  <line x1="0" y1="${H1}" x2="${W}" y2="${H1}" stroke="${C.border}" stroke-width=".5"/>
+  <rect width="${W}" height="${H1}" rx="${R}" class="f-panel"/>
+  <rect y="${H1 - R}" width="${W}" height="${R}" class="f-panel"/>
+  <line x1="0" y1="${H1}" x2="${W}" y2="${H1}" class="s-bd" stroke-width=".5"/>
   <!-- pkg name + version -->
-  <text x="${PAD}" y="19" font-family="${FONT}" font-size="12" fill="${C.value}" font-weight="bold">${pkgLabel}<tspan fill="${C.label}" font-weight="normal">${verLabel}</tspan></text>
+  <text x="${PAD}" y="19" font-family="${FONT}" font-size="12" class="f-val" font-weight="bold">${pkgLabel}<tspan class="f-lbl" font-weight="normal">${verLabel}</tspan></text>
   <!-- pills -->
   ${pillEls.join('')}`;
 
@@ -248,16 +297,16 @@ export function generateStandardBanner(d: BannerData): string {
 		const BAR_X   = PAD + LABEL_W + SIZE_W;
 		const BAR_W   = W - BAR_X - PAD;
 
-		const roundColors = [C.accent, C.green, C.yellow, C.red];
+		const roundKeys: Array<'acc' | 'grn' | 'yel' | 'red'> = ['acc', 'grn', 'yel', 'red'];
 
 		const rowEls: string[] = [];
 		let ry = H1 + STATS_H;
 
 		for (const round of rounds) {
-			const rc = roundColors[Math.min(round.idx, roundColors.length - 1)];
+			const rk = roundKeys[Math.min(round.idx, roundKeys.length - 1)];
 			const roundLabel = `ROUND ${round.idx + 1}`;
 			rowEls.push(
-				`<text x="${PAD}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9" fill="${rc}" letter-spacing=".05em">${esc(roundLabel)}</text>`,
+				`<text x="${PAD}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9" class="f-${rk}" letter-spacing=".05em">${esc(roundLabel)}</text>`,
 			);
 			ry += ROW_H;
 
@@ -267,13 +316,13 @@ export function generateStandardBanner(d: BannerData): string {
 				const name = waterfallFilename(r.url, 18);
 				const size = r.bytes != null ? formatSize(r.bytes) : '\u2013';
 				const rowBg = ri % 2 === 1
-					? `<rect x="0" y="${ry}" width="${W}" height="${ROW_H}" fill="${C.panel}" fill-opacity=".5"/>`
+					? `<rect x="0" y="${ry}" width="${W}" height="${ROW_H}" class="f-panel" fill-opacity=".5"/>`
 					: '';
 				rowEls.push(
 					rowBg +
-					`<text x="${PAD}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9.5" fill="${C.value}">${esc(name)}</text>` +
-					`<text x="${BAR_X - 4}" y="${ry + ROW_H - 3}" text-anchor="end" font-family="${FONT}" font-size="9.5" fill="${C.label}">${esc(size)}</text>` +
-					`<rect x="${BAR_X.toFixed(1)}" y="${ry + 2}" width="${barW.toFixed(1)}" height="${ROW_H - 4}" rx="1.5" fill="${rc}" fill-opacity=".8"/>`,
+					`<text x="${PAD}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9.5" class="f-val">${esc(name)}</text>` +
+					`<text x="${BAR_X - 4}" y="${ry + ROW_H - 3}" text-anchor="end" font-family="${FONT}" font-size="9.5" class="f-lbl">${esc(size)}</text>` +
+					`<rect x="${BAR_X.toFixed(1)}" y="${ry + 2}" width="${barW.toFixed(1)}" height="${ROW_H - 4}" rx="1.5" class="f-${rk}" fill-opacity=".8"/>`,
 				);
 				ry += ROW_H;
 			}
@@ -282,9 +331,9 @@ export function generateStandardBanner(d: BannerData): string {
 		return `${svgHeader(H)}
   <!-- stats line -->
   ${renderStatLine(H1 + 13)}
-  <line x1="0" y1="${H1 + STATS_H}" x2="${W}" y2="${H1 + STATS_H}" stroke="${C.border}" stroke-width=".5"/>
+  <line x1="0" y1="${H1 + STATS_H}" x2="${W}" y2="${H1 + STATS_H}" class="s-bd" stroke-width=".5"/>
   <!-- label / bar divider -->
-  <line x1="${BAR_X}" y1="${H1 + STATS_H}" x2="${BAR_X}" y2="${H}" stroke="${C.border}" stroke-width=".5" stroke-opacity=".4"/>
+  <line x1="${BAR_X}" y1="${H1 + STATS_H}" x2="${BAR_X}" y2="${H}" class="s-bd" stroke-width=".5" stroke-opacity=".4"/>
   <!-- waterfall rows -->
   ${rowEls.join('\n  ')}
 </svg>`.trim();
@@ -301,15 +350,15 @@ export function generateStandardBanner(d: BannerData): string {
 
 	return `${svgHeader(H)}
   <!-- stats row: size bar -->
-  <rect x="${PAD}" y="${barY}" width="${barMaxW}" height="4" rx="2" fill="${C.border}" fill-opacity=".4"/>
-  <rect x="${PAD}" y="${barY}" width="${barW}" height="4" rx="2" fill="${sizeCol}" fill-opacity=".7"/>
+  <rect x="${PAD}" y="${barY}" width="${barMaxW}" height="4" rx="2" class="f-bd" fill-opacity=".4"/>
+  <rect x="${PAD}" y="${barY}" width="${barW}" height="4" rx="2" class="${sizeCls}" fill-opacity=".7"/>
   <!-- stats row: text metrics -->
   ${renderStatLine(H1 + 28)}
 </svg>`.trim();
 }
 
 // ─── 3. FULL DETAIL BANNER ───────────────────────────────────────────────────
-// Multi-row dark banner: header row + one row per export
+// Multi-row banner: header row + one row per export
 // Width: 520px  Height: 28 + N*22
 // Use: ![](https://bulk.frustrated.dev/banner/zustand?detail=full)
 
@@ -339,52 +388,51 @@ export function generateFullBanner(d: FullBannerData): string {
 	}, 0);
 	const totalStr = totalBytes === null ? '…' : formatSize(totalBytes);
 
-	// CDN — derive from first export (all same CDN in practice)
 	const cdn = d.exports[0]?.cdn ?? '';
 
 	const rows = d.exports.map((e, i) => {
 		const y      = HEAD_H + i * ROW_H;
 		const isLast = i === d.exports.length - 1;
-		const keyStr = e.key === '.' ? `${d.pkg}` : `${d.pkg}/${e.key}`;
+		const keyStr  = e.key === '.' ? `${d.pkg}` : `${d.pkg}/${e.key}`;
 		const sizeStr = e.isError ? 'error' : e.bytes === null ? '…' : formatSize(e.bytes);
-		const sizeCol = e.isError ? C.red : e.bytes === null ? C.label : C.green;
+		const sizeCls = e.isError ? 'f-red' : e.bytes === null ? 'f-lbl' : 'f-grn';
 
-		// Simple bar proportional to bytes relative to max
 		const maxBytes = Math.max(1, ...d.exports.map(ex => ex.bytes ?? 0));
 		const barW = e.bytes === null ? 0 : Math.round(((e.bytes / maxBytes) * (W * 0.25)));
 
 		return `
   <!-- row ${i} -->
-  <rect x="0" y="${y}" width="${W}" height="${ROW_H}" fill="${i % 2 === 0 ? C.panel : C.bg}"/>
-  ${!isLast ? `<line x1="0" y1="${y + ROW_H}" x2="${W}" y2="${y + ROW_H}" stroke="${C.border}" stroke-width=".5"/>` : ''}
+  <rect x="0" y="${y}" width="${W}" height="${ROW_H}" class="${i % 2 === 0 ? 'f-panel' : 'f-bg'}"/>
+  ${!isLast ? `<line x1="0" y1="${y + ROW_H}" x2="${W}" y2="${y + ROW_H}" class="s-bd" stroke-width=".5"/>` : ''}
   <!-- bar -->
-  <rect x="${PAD}" y="${y + 7}" width="${barW}" height="8" rx="2" fill="${C.accent}" fill-opacity=".25"/>
+  <rect x="${PAD}" y="${y + 7}" width="${barW}" height="8" rx="2" class="f-acc" fill-opacity=".25"/>
   <!-- key -->
-  <text x="${PAD}" y="${y + 15}" font-family="${FONT}" font-size="10.5" fill="${C.value}">${esc(keyStr)}</text>
+  <text x="${PAD}" y="${y + 15}" font-family="${FONT}" font-size="10.5" class="f-val">${esc(keyStr)}</text>
   <!-- size -->
-  <text x="${W - PAD}" y="${y + 15}" text-anchor="end" font-family="${FONT}" font-size="10.5" fill="${sizeCol}" font-weight="bold">${esc(sizeStr)}</text>`;
+  <text x="${W - PAD}" y="${y + 15}" text-anchor="end" font-family="${FONT}" font-size="10.5" class="${sizeCls}" font-weight="bold">${esc(sizeStr)}</text>`;
 	});
 
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(d.pkg)} bundle sizes">
   <title>${esc(d.pkg)}@${esc(d.version)} · ${esc(cdn)} · ${esc(totalStr)} total</title>
+  <style>${THEME_CSS}</style>
   <!-- outer card -->
-  <rect width="${W}" height="${H}" rx="${R}" fill="${C.bg}"/>
-  <rect width="${W}" height="${H}" rx="${R}" fill="none" stroke="${C.border}" stroke-width="1"/>
+  <rect width="${W}" height="${H}" rx="${R}" class="f-bg"/>
+  <rect width="${W}" height="${H}" rx="${R}" fill="none" class="s-bd" stroke-width="1"/>
   <!-- header -->
-  <rect width="${W}" height="${HEAD_H}" rx="${R}" fill="${C.panel}"/>
-  <rect y="${HEAD_H - R}" width="${W}" height="${R}" fill="${C.panel}"/>
-  <line x1="0" y1="${HEAD_H}" x2="${W}" y2="${HEAD_H}" stroke="${C.border}" stroke-width=".5"/>
+  <rect width="${W}" height="${HEAD_H}" rx="${R}" class="f-panel"/>
+  <rect y="${HEAD_H - R}" width="${W}" height="${R}" class="f-panel"/>
+  <line x1="0" y1="${HEAD_H}" x2="${W}" y2="${HEAD_H}" class="s-bd" stroke-width=".5"/>
   <!-- header: left — pkg@version -->
-  <text x="${PAD}" y="19" font-family="${FONT}" font-size="12" fill="${C.value}" font-weight="bold">${esc(d.pkg)}<tspan fill="${C.label}" font-weight="normal">@${esc(d.version)}</tspan></text>
+  <text x="${PAD}" y="19" font-family="${FONT}" font-size="12" class="f-val" font-weight="bold">${esc(d.pkg)}<tspan class="f-lbl" font-weight="normal">@${esc(d.version)}</tspan></text>
   <!-- header: right — total + cdn pill -->
-  <text x="${W - PAD - tw(cdn) - 16}" y="19" text-anchor="end" font-family="${FONT}" font-size="12" fill="${C.green}" font-weight="bold">${esc(totalStr)}</text>
-  <rect x="${W - PAD - tw(cdn) - 12}" y="7" width="${tw(cdn) + 12}" height="15" rx="3" fill="${C.accent}" fill-opacity=".15" stroke="${C.accent}" stroke-width=".5"/>
-  <text x="${W - PAD - tw(cdn) / 2 - 6}" y="19" text-anchor="middle" font-family="${FONT}" font-size="10" fill="${C.accent}">${esc(cdn)}</text>
+  <text x="${W - PAD - tw(cdn) - 16}" y="19" text-anchor="end" font-family="${FONT}" font-size="12" class="f-grn" font-weight="bold">${esc(totalStr)}</text>
+  <rect x="${W - PAD - tw(cdn) - 12}" y="7" width="${tw(cdn) + 12}" height="15" rx="3" class="f-acc s-acc" fill-opacity=".15" stroke-width=".5"/>
+  <text x="${W - PAD - tw(cdn) / 2 - 6}" y="19" text-anchor="middle" font-family="${FONT}" font-size="10" class="f-acc">${esc(cdn)}</text>
   ${rows.join('')}
   <!-- bottom corners -->
-  <rect x="0" y="${H - R}" width="${W}" height="${R}" rx="0" fill="${C.bg}"/>
-  <rect x="0" y="${H - R}" width="${R}" height="${R}" fill="${C.bg}"/>
-  <rect x="${W - R}" y="${H - R}" width="${R}" height="${R}" fill="${C.bg}"/>
+  <rect x="0" y="${H - R}" width="${W}" height="${R}" rx="0" class="f-bg"/>
+  <rect x="0" y="${H - R}" width="${R}" height="${R}" class="f-bg"/>
+  <rect x="${W - R}" y="${H - R}" width="${R}" height="${R}" class="f-bg"/>
 </svg>`.trim();
 }
 

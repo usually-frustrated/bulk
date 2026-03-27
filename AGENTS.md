@@ -192,36 +192,41 @@ HEAD → no Content-Length (chunked) → GET → body.byteLength → bytes_raw
 ## 🎨 banner SVG (svg.ts + banner.ts)
 
 ### generateBadgeSvg (compact badge)
-Two-section badge. Width auto-sized to text. Height 20px. Always dark — matches the banner's GitHub dark theme.
-- Left section (label): always `#161b22` background, `#8b949e` text (no CSS `prefers-color-scheme`)
-- Right section (value): confidence color — established=green, tentative=yellow, server-estimate=yellow (~prefix), no-data=dark pill
-- Border: always `#30363d`
-- Flat design (no gradient); width-scoped clipPath IDs (`bg<W>c`) prevent conflicts when multiple badges share a page
-- `BadgeStats`: `pkgName`, `version`, `format`, `exportCount`, `fileCount`, `roundTrips` (no `durationMs` — timing not stored)
+Two-section badge. Width auto-sized to text. Height 20px. Adapts to system theme via `prefers-color-scheme`.
+- Left section (label): `f-panel` background, `f-lbl` text
+- Right section (value): CSS class based on confidence — `f-grn` (established), `f-yel` (tentative/server-estimate), `f-panel` (no-data)
+- Value text: white (`fill="#fff"`) on coloured backgrounds; `f-acc` themed blue for no-data CTA
+- Border: `s-bd` (themed stroke)
+- Flat design; width-scoped clipPath IDs (`bg<W>c`) prevent conflicts when multiple badges share a page
+- `BadgeStats`: `pkgName`, `version`, `format`, `exportCount`, `fileCount`, `roundTrips` (no `durationMs`)
 
 ### generateStandardBanner (standard banner)
-Width 520px. Two layout modes selected by whether `BannerData.resources` is populated:
+Width 520px. Adapts to system theme via `prefers-color-scheme`. Two layout modes:
 
 **Waterfall mode** (when `resources` present):
-- Row 1 (28px, panel bg): `pkg@version` bold + CDN/ESM/UMD pills on right
-- Stats line (18px): size · exports · files · round trips (compact text; no duration — timing not stored)
-- Per-resource rows (13px each): filename label (≤22 chars, 145px col) + **byte-proportional bar** (bar width = resource bytes / max bytes across all files)
-- Resources grouped by pre-computed `roundTrip` index from DB; largest file first within each round
+- Row 1 (28px, `f-panel` bg): `pkg@version` bold (`f-val`) + CDN/ESM/UMD pills on right
+- Stats line (18px): size (`f-grn`/`f-red`/`f-lbl`) · exports · files · round trips (all `f-lbl`), separator dots `f-bd`
+- Per-resource rows (13px each): filename (`f-val`, ≤18 chars), size (`f-lbl`), byte-proportional bar (CSS colour class by round trip)
+- Resources grouped by pre-computed `roundTrip`; largest file first within each round
 - Total height: `28 + 18 + N×13 + 5`
-- Round-trip bar colours: accent-blue (trip 1) → green → yellow → red
+- Round-trip colours: `f-acc` → `f-grn` → `f-yel` → `f-red`
 
 **Fallback mode** (no `resources`):
-- Row 1 (28px, panel bg): same header
-- Row 2 (36px, dark bg): proportional size bar (bytes/500kB) + stats text
-- Total height: 64px (fixed)
-
-`BannerData` interface:
-- `resources?: BannerResource[]` — per-resource `{url, roundTrip, bytes}` (pre-computed at ingestion; no timing fields)
-- `fileCount?`, `roundTrips?` — optional aggregated stats for the stats line (no `durationMs`)
+- Row 2 (36px): `f-bd` bar track + `sizeCls` fill bar + stats text
+- Total height: 64px fixed
 
 ### generateFullBanner (full banner)
-Multi-row. Width 520px, Height = 28 + N×22px.
-Header row + one row per export showing key, proportional bar, size.
+Multi-row. Width 520px, Height = 28 + N×22px. Adapts to system theme via `prefers-color-scheme`.
+Header row + one row per export; alternating `f-panel`/`f-bg` row backgrounds.
+
+### Theme CSS (`THEME_CSS` constant in svg.ts)
+All SVG elements use CSS classes (`f-*` for fill, `s-*` for stroke) instead of inline colour attributes. A single `@media (prefers-color-scheme: light)` block switches the entire palette.
+
+Dark palette (default): `#0d1117` bg / `#161b22` panel / `#30363d` border / `#8b949e` label / `#e6edf3` value / `#58a6ff` acc / `#3fb950` grn / `#d29922` yel / `#f85149` red
+
+Light palette: `#ffffff` bg / `#f6f8fa` panel / `#d0d7de` border / `#57606a` label / `#24292f` value / `#0969da` acc / `#1a7f37` grn / `#9a6700` yel / `#cf222e` red
+
+CSS classes: `f-bg f-panel f-lbl f-val f-bd f-acc f-grn f-yel f-red` (fill) · `s-bd s-acc s-grn s-yel s-red` (stroke)
 
 ### banner.ts — DB-only, no live measurements
 
