@@ -79,7 +79,7 @@ async function fetchPackageSize(provider: Provider, pkg: string): Promise<FetchR
 }
 
 // Cache version - increment this to invalidate all caches on deployment
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 
 export async function handleBadgeRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 	const requestStartTime = Date.now();

@@ -60,6 +60,12 @@ const THEME_CSS = `
   .s-grn   { stroke: ${D.grn} }
   .s-yel   { stroke: ${D.yel} }
   .s-red   { stroke: ${D.red} }
+  /* Badge value-pill: solid colour in dark, panel bg in light (see light overrides) */
+  .vc-grn  { fill: ${D.grn} }
+  .vc-yel  { fill: ${D.yel} }
+  /* Badge value-text: white in dark, confidence-colour in light */
+  .vt-grn  { fill: #fff }
+  .vt-yel  { fill: #fff }
   @media (prefers-color-scheme: light) {
     .f-bg    { fill: ${L.bg} }
     .f-panel { fill: ${L.panel} }
@@ -75,6 +81,11 @@ const THEME_CSS = `
     .s-grn   { stroke: ${L.grn} }
     .s-yel   { stroke: ${L.yel} }
     .s-red   { stroke: ${L.red} }
+    /* Badge value section: panel bg + confidence-coloured text in light mode */
+    .vc-grn  { fill: ${L.panel} }
+    .vc-yel  { fill: ${L.panel} }
+    .vt-grn  { fill: ${L.grn} }
+    .vt-yel  { fill: ${L.yel} }
   }`.trim();
 
 function esc(s: string): string {
@@ -107,13 +118,29 @@ export function generateBadgeSvg(
 	stats?: BadgeStats,
 ): string {
 	let baseValue: string;
-	let vcCls: string; // CSS class for value-section background fill
+	// vcCls: right-section background (solid colour dark → panel light)
+	// vtAttr: value text attribute (white dark → confidence colour light)
+	let vcCls: string;
+	let vtAttr: string;
 
 	switch (confidence) {
-		case 'established':     baseValue = value;             vcCls = 'f-grn';   break;
-		case 'tentative':       baseValue = `${value} *`;      vcCls = 'f-yel';   break;
-		case 'server-estimate': baseValue = `~${value}`;       vcCls = 'f-yel';   break;
-		case 'no-data':         baseValue = 'measure \u2192';  vcCls = 'f-panel'; break;
+		case 'established':
+			baseValue = value;
+			vcCls = 'vc-grn'; vtAttr = 'class="vt-grn"';
+			break;
+		case 'tentative':
+			baseValue = `${value} *`;
+			vcCls = 'vc-yel'; vtAttr = 'class="vt-yel"';
+			break;
+		case 'server-estimate':
+			baseValue = `~${value}`;
+			vcCls = 'vc-yel'; vtAttr = 'class="vt-yel"';
+			break;
+		case 'no-data':
+			// No-data: panel bg (themed), accent-blue CTA text (themed)
+			baseValue = 'measure \u2192';
+			vcCls = 'f-panel'; vtAttr = 'class="f-acc"';
+			break;
 	}
 
 	const pkgId = stats?.pkgName
@@ -133,8 +160,7 @@ export function generateBadgeSvg(
 	const W  = lw + vw;
 	const lx = lw / 2;
 	const vx = lw + vw / 2;
-	// Value text: white on coloured backgrounds; themed accent for no-data CTA
-	const vtextAttr = confidence === 'no-data' ? 'class="f-acc"' : 'fill="#fff"';
+	// vtAttr is set above per confidence case
 	// Width-scoped clipPath ID avoids conflicts when multiple badges share a page
 	const uid = `bg${W}`;
 
@@ -151,7 +177,7 @@ export function generateBadgeSvg(
   <rect width="${W}" height="${H}" rx="${R}" fill="none" class="s-bd" stroke-width=".8"/>
   <g text-anchor="middle" font-family="${FONT}" font-size="11">
     <text x="${lx}" y="14" class="f-lbl">${esc(label)}</text>
-    <text x="${vx}" y="14" ${vtextAttr}>${esc(displayValue)}</text>
+    <text x="${vx}" y="14" ${vtAttr}>${esc(displayValue)}</text>
   </g>
 </svg>`.trim();
 }
