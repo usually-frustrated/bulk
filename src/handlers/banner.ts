@@ -1,37 +1,9 @@
 import type { Env } from '../types';
+import type { BannerResource } from '../utils/svg';
 import { generateStandardBanner, generateFullBanner, generateBadgeSvg, formatSize } from '../utils/svg';
-import { resolveVersion, getPackageExports, getCachedSize, getMeasuredSize, getLatestResourceTimings } from '../utils/db';
+import { resolveVersion, getPackageExports, getCachedSize, getMeasuredSizeFromWaterfall, getLatestWaterfall } from '../utils/db';
 import type { CDN } from '../utils/cdn';
 
-/**
- * Returns true if the resource URL belongs to the primary package being measured,
- * not a transitive dependency loaded by the CDN.
- *
- * CDNs like esm.sh load external deps (react, react-dom, cookie, …) as separate
- * HTTP requests alongside the package itself. We never want those in the banner
- * analysis — only files that are part of the package being measured.
- *
- * Keeps:
- *  • URLs that contain the package's own name (e.g. "react-router-dom")
- *  • CDN-generated chunk files (chunk-XXXXXXX.mjs) which are internal splits
- *    of the primary package bundle, not separate packages
- * Drops:
- *  • URLs containing a different package name / version range operators
- */
-function isOwnResource(url: string, pkg: string): boolean {
-	// Strip @scope/ prefix so "@scope/name" → "name" for URL substring matching
-	const pkgBase = pkg.startsWith('@')
-		? pkg.split('/').slice(1).join('/').toLowerCase()
-		: pkg.toLowerCase();
-	const lurl = url.toLowerCase();
-	if (lurl.includes(pkgBase)) return true;
-	// Keep CDN-internal chunk files (no external package name in their path segment)
-	try {
-		const seg = new URL(url).pathname.split('/').pop() ?? '';
-		if (/^chunk-[a-z0-9]+\.m?js$/i.test(seg)) return true;
-	} catch {}
-	return false;
-}
 
 export async function handleBannerRequest(
 	request: Request,
@@ -82,12 +54,11 @@ export async function handleBannerRequest(
 			: versionHint;
 
 		if (type === 'compact') {
-			// Try to get size from DB first, then measure
 			let bytes: number | null = null;
-			let confidence: 'established' | 'server-estimate' = 'server-estimate';
+			let confidence: 'established' | 'tentative' | 'server-estimate' = 'server-estimate';
 			try {
-				const ms = await getMeasuredSize(pkg, version, 'index', cdn, env);
-				if (ms) { bytes = ms.bytes_transfer ?? ms.bytes_raw ?? null; confidence = 'established'; }
+				const ms = await getMeasuredSizeFromWaterfall(pkg, version, 'index', cdn, env);
+				if (ms) { bytes = ms.bytes_raw ?? null; confidence = ms.confidence; }
 			} catch {}
 			if (bytes === null) {
 				try {
@@ -109,49 +80,33 @@ export async function handleBannerRequest(
 		const hasUmd = false; // we don't check UMD here; keep simple
 
 		if (type === 'standard') {
-			// Get index export size
+			// Fetch the latest structural waterfall from the database.
+			// It carries pre-computed round_trip indices and decoded byte sizes.
 			let bytes: number | null = null;
+			let fileCount: number | undefined;
+			let roundTrips: number | undefined;
+			let resources: BannerResource[] | undefined;
 			try {
-				const ms = await getMeasuredSize(pkg, version, 'index', cdn, env);
-				if (ms) bytes = ms.bytes_transfer ?? ms.bytes_raw ?? null;
+				const wf = await getLatestWaterfall(pkg, version, 'index', cdn, env);
+				if (wf.length > 0) {
+					resources  = wf.map((r) => ({ url: r.url, roundTrip: r.round_trip, bytes: r.bytes }));
+					fileCount  = resources.length;
+					roundTrips = Math.max(...resources.map((r) => r.roundTrip)) + 1;
+					// Derive total size as sum of all file bytes in the waterfall
+					const total = resources.reduce<number | null>((acc, r) => {
+						if (acc === null || r.bytes === null) return null;
+						return acc + r.bytes;
+					}, 0);
+					bytes = total;
+				}
 			} catch {}
+			// Fall back to server-estimated size if no waterfall data
 			if (bytes === null) {
 				try {
 					const cs = await getCachedSize(pkg, version, 'index', cdn, env);
 					if (cs) bytes = cs.bytes_transfer ?? cs.bytes_raw ?? null;
 				} catch {}
 			}
-			// Fetch per-resource timings from the latest browser measurement session
-			// so the banner can render a network waterfall.
-			let fileCount: number | undefined;
-			let roundTrips: number | undefined;
-			let durationMs: number | undefined;
-			let resources: Array<{ url: string; startTime: number; responseEnd: number; transferSize: number | null }> | undefined;
-			try {
-				const timings = await getLatestResourceTimings(pkg, version, 'index', cdn, env);
-				// Filter to the package's own resources — exclude transitive deps the CDN
-				// loads as separate requests (react, react-dom, cookie, etc.)
-				const ownTimings = timings.filter((t) => isOwnResource(t.url, pkg));
-				if (ownTimings.length > 0) {
-					resources = ownTimings.map((t) => ({
-						url:          t.url,
-						startTime:    t.start_time,
-						responseEnd:  t.response_end,
-						transferSize: t.transfer_size,
-					}));
-					fileCount = resources.length;
-					// Compute round trips from timing gaps (>5 ms = new round)
-					const sorted = [...resources].sort((a, b) => a.startTime - b.startTime);
-					let trips = 1;
-					for (let i = 1; i < sorted.length; i++) {
-						if (sorted[i].startTime - sorted[i - 1].startTime > 5) trips++;
-					}
-					roundTrips = trips;
-					const t0   = Math.min(...sorted.map((r) => r.startTime));
-					const tMax = Math.max(...sorted.map((r) => r.responseEnd));
-					durationMs = tMax - t0;
-				}
-			} catch {}
 
 			const svg = generateStandardBanner({
 				pkg, version, cdn,
@@ -162,7 +117,6 @@ export async function handleBannerRequest(
 				isError: false,
 				fileCount,
 				roundTrips,
-				durationMs,
 				resources,
 			});
 			return new Response(svg, {
@@ -176,8 +130,8 @@ export async function handleBannerRequest(
 				exports.map(async (e) => {
 					let bytes: number | null = null;
 					try {
-						const ms = await getMeasuredSize(pkg, version, e.key, cdn, env);
-						if (ms) bytes = ms.bytes_transfer ?? ms.bytes_raw ?? null;
+						const ms = await getMeasuredSizeFromWaterfall(pkg, version, e.key, cdn, env);
+						if (ms) bytes = ms.bytes_raw ?? null;
 					} catch {}
 					if (bytes === null) {
 						try {

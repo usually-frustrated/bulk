@@ -19,6 +19,27 @@ export interface ResourceTimingEntry {
 	exportKey?: string;
 }
 
+// ─── Own-resource detection ───────────────────────────────────────────────────
+
+/**
+ * Returns true if the resource URL belongs to the primary package being
+ * measured — not a transitive dependency loaded by the CDN.
+ * Mirrors the server-side logic in banner.ts.
+ */
+function isOwnResource(url: string, pkg: string): boolean {
+	const pkgBase = pkg.startsWith('@')
+		? pkg.split('/').slice(1).join('/').toLowerCase()
+		: pkg.toLowerCase();
+	const lurl = url.toLowerCase();
+	if (lurl.includes(pkgBase)) return true;
+	// CDN-internal chunk files (e.g. chunk-abc123.mjs) are own-package splits
+	try {
+		const seg = new URL(url).pathname.split('/').pop() ?? '';
+		if (/^chunk-[a-z0-9]+\.m?js$/i.test(seg)) return true;
+	} catch {}
+	return false;
+}
+
 // ─── CDN URL construction ─────────────────────────────────────────────────────
 
 /**
@@ -225,6 +246,15 @@ ${importExprs}
 				match.pkg = entries[0].pkg;
 				match.version = entries[0].version;
 				match.exportKey = entries[0].exportKey;
+			}
+			// Also annotate other own-package resources (chunk splits, sub-files, etc.)
+			// so they are included in the waterfall recording.
+			for (const r of results) {
+				if (!r.pkg && isOwnResource(r.url, entries[0].pkg)) {
+					r.pkg      = entries[0].pkg;
+					r.version  = entries[0].version;
+					r.exportKey = entries[0].exportKey;
+				}
 			}
 
 			iframe.remove();

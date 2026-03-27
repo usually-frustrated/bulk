@@ -213,7 +213,104 @@ export async function getMeasuredSize(
 	};
 }
 
-// ─── latest resource timings (for banner waterfall) ─────────────────────────
+// ─── package_waterfall ───────────────────────────────────────────────────────
+
+export interface WaterfallRow {
+	round_trip: number;
+	url:        string;
+	bytes:      number | null; // decoded_body_size (uncompressed)
+}
+
+/**
+ * Persist the structural waterfall for a measurement session.
+ * `rows` must be pre-sorted by round_trip (ascending). All rows share
+ * the same `recorded_at` because the batch INSERT lands in the same SQLite
+ * second, which lets `getLatestWaterfall` group them by MAX(recorded_at).
+ */
+export async function saveWaterfall(
+	pkg: string,
+	version: string,
+	exportKey: string,
+	cdn: CDN,
+	rows: WaterfallRow[],
+	env: Env,
+): Promise<void> {
+	if (!rows.length) return;
+	const stmts = rows.map((r) =>
+		env.DB.prepare(
+			`INSERT INTO package_waterfall
+			 (package, version, export_key, cdn, round_trip, url, bytes)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		).bind(pkg, version, exportKey, cdn, r.round_trip, r.url, r.bytes),
+	);
+	await env.DB.batch(stmts);
+}
+
+/**
+ * Return the most recent waterfall for the given package/version/export/cdn.
+ * Ordered by round_trip ASC, then bytes DESC (largest file first within a round).
+ */
+export async function getLatestWaterfall(
+	pkg: string,
+	version: string,
+	exportKey: string,
+	cdn: CDN,
+	env: Env,
+): Promise<WaterfallRow[]> {
+	const rows = await env.DB.prepare(
+		`SELECT round_trip, url, bytes
+		 FROM package_waterfall
+		 WHERE package = ? AND version = ? AND export_key = ? AND cdn = ?
+		   AND recorded_at = (
+		     SELECT MAX(recorded_at) FROM package_waterfall
+		     WHERE package = ? AND version = ? AND export_key = ? AND cdn = ?
+		   )
+		 ORDER BY round_trip ASC, bytes DESC NULLS LAST`,
+	)
+		.bind(pkg, version, exportKey, cdn, pkg, version, exportKey, cdn)
+		.all<WaterfallRow>();
+	return rows.results;
+}
+
+/**
+ * P50 of total decoded bytes per session from package_waterfall.
+ * Requires >= 10 sessions; returns null otherwise.
+ * Sessions are grouped by recorded_at; the total is the sum of all file bytes.
+ */
+export async function getMeasuredSizeFromWaterfall(
+	pkg: string,
+	version: string,
+	exportKey: string,
+	cdn: CDN,
+	env: Env,
+): Promise<MeasuredSize | null> {
+	// Fetch per-session totals (all sessions in past 30 days, ordered by total)
+	const rows = await env.DB.prepare(
+		`SELECT SUM(bytes) AS total
+		 FROM package_waterfall
+		 WHERE package = ? AND version = ? AND export_key = ? AND cdn = ?
+		   AND bytes > 0
+		   AND recorded_at > datetime('now', '-30 days')
+		 GROUP BY recorded_at
+		 ORDER BY total`,
+	)
+		.bind(pkg, version, exportKey, cdn)
+		.all<{ total: number }>();
+
+	const sessions = rows.results;
+	const n = sessions.length;
+	if (n < 10) return null;
+
+	const median = sessions[Math.floor((n - 1) / 2)].total;
+	return {
+		bytes_raw:    median,
+		bytes_transfer: null, // decoded size only; no wire-size P50 available
+		confidence:   n >= 40 ? 'established' : 'tentative',
+		sampleCount:  n,
+	};
+}
+
+// ─── latest resource timings (legacy — kept for backward compat) ──────────────
 
 export interface ResourceTimingRow {
 	url:               string;

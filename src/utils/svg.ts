@@ -51,7 +51,6 @@ export interface BadgeStats {
 	exportCount?: number;
 	fileCount?:   number;
 	roundTrips?:  number;
-	durationMs?:  number;
 }
 
 export function generateBadgeSvg(
@@ -80,7 +79,6 @@ export function generateBadgeSvg(
 	if (stats?.exportCount != null) parts.push(`${stats.exportCount} export${stats.exportCount !== 1 ? 's' : ''}`);
 	if (stats?.fileCount   != null) parts.push(`${stats.fileCount} file${stats.fileCount !== 1 ? 's' : ''}`);
 	if (stats?.roundTrips  != null) parts.push(`${stats.roundTrips} round trip${stats.roundTrips !== 1 ? 's' : ''}`);
-	if (stats?.durationMs  != null) parts.push(`${Math.round(stats.durationMs)} ms`);
 	if (stats?.format)               parts.push(stats.format);
 	const displayValue = parts.join('  \u00b7  ');
 
@@ -90,34 +88,22 @@ export function generateBadgeSvg(
 	const lx = lw / 2;
 	const vx = lw + vw / 2;
 	const vtextFill = confidence === 'no-data' ? C.accent : '#fff';
-	// Width-scoped ID avoids conflicts when multiple badges appear in the same HTML document
+	// Width-scoped clipPath ID avoids conflicts when multiple badges appear in the same document
 	const uid = `bg${W}`;
 
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" role="img" aria-label="${esc(label)}: ${esc(displayValue)}">
   <title>${esc(label)}: ${esc(displayValue)}</title>
-  <style>
-    #${uid} .lb { fill: #f6f8fa }
-    #${uid} .lt { fill: #57606a }
-    #${uid} .bd { stroke: #d0d7de }
-    @media (prefers-color-scheme: dark) {
-      #${uid} .lb { fill: #161b22 }
-      #${uid} .lt { fill: #8b949e }
-      #${uid} .bd { stroke: #30363d }
-    }
-  </style>
-  <g id="${uid}">
-    <defs>
-      <clipPath id="${uid}c"><rect width="${W}" height="${H}" rx="${R}" fill="#fff"/></clipPath>
-    </defs>
-    <g clip-path="url(#${uid}c)">
-      <rect class="lb" width="${W}" height="${H}"/>
-      <rect x="${lw}" width="${vw}" height="${H}" fill="${vc}"/>
-    </g>
-    <rect width="${W}" height="${H}" rx="${R}" fill="none" class="bd" stroke-width=".8"/>
-    <g text-anchor="middle" font-family="${FONT}" font-size="11">
-      <text x="${lx}" y="14" class="lt">${esc(label)}</text>
-      <text x="${vx}" y="14" fill="${vtextFill}">${esc(displayValue)}</text>
-    </g>
+  <defs>
+    <clipPath id="${uid}c"><rect width="${W}" height="${H}" rx="${R}" fill="#fff"/></clipPath>
+  </defs>
+  <g clip-path="url(#${uid}c)">
+    <rect width="${W}" height="${H}" fill="${C.panel}"/>
+    <rect x="${lw}" width="${vw}" height="${H}" fill="${vc}"/>
+  </g>
+  <rect width="${W}" height="${H}" rx="${R}" fill="none" stroke="${C.border}" stroke-width=".8"/>
+  <g text-anchor="middle" font-family="${FONT}" font-size="11">
+    <text x="${lx}" y="14" fill="${C.label}">${esc(label)}</text>
+    <text x="${vx}" y="14" fill="${vtextFill}">${esc(displayValue)}</text>
   </g>
 </svg>`.trim();
 }
@@ -128,10 +114,9 @@ export function generateBadgeSvg(
 // Use: ![](https://bulk.frustrated.dev/_banner/standard/zustand)
 
 export interface BannerResource {
-	url:          string;
-	startTime:    number;
-	responseEnd:  number;
-	transferSize: number | null;
+	url:       string;
+	roundTrip: number; // 0-indexed dependency depth (pre-computed at ingestion)
+	bytes:     number | null; // decoded_body_size (uncompressed)
 }
 
 export interface BannerData {
@@ -147,8 +132,7 @@ export interface BannerData {
 	// optional waterfall stats
 	fileCount?:  number;
 	roundTrips?: number;
-	durationMs?: number;
-	// per-resource timings for waterfall rendering
+	// per-resource waterfall entries for rendering
 	resources?:  BannerResource[];
 }
 
@@ -196,17 +180,15 @@ export function generateStandardBanner(d: BannerData): string {
 	const verLabel = `@${esc(d.version)}`;
 
 	// ── stat items (shared by both layout paths) ─────────────────────────────
-	const exportsLabel  = `${d.exportCount} export${d.exportCount !== 1 ? 's' : ''}`;
-	const filesLabel    = d.fileCount  != null ? `${d.fileCount} file${d.fileCount !== 1 ? 's' : ''}` : null;
-	const tripsLabel    = d.roundTrips != null ? `${d.roundTrips} round trip${d.roundTrips !== 1 ? 's' : ''}` : null;
-	const durationLabel = d.durationMs != null ? `${d.durationMs.toFixed(0)} ms` : null;
+	const exportsLabel = `${d.exportCount} export${d.exportCount !== 1 ? 's' : ''}`;
+	const filesLabel   = d.fileCount  != null ? `${d.fileCount} file${d.fileCount !== 1 ? 's' : ''}` : null;
+	const tripsLabel   = d.roundTrips != null ? `${d.roundTrips} round trip${d.roundTrips !== 1 ? 's' : ''}` : null;
 
 	const statItems: Array<{ label: string; color: string }> = [
 		{ label: sizeStr, color: sizeCol },
 		{ label: exportsLabel, color: C.label },
-		...(filesLabel    ? [{ label: filesLabel,    color: C.label }] : []),
-		...(tripsLabel    ? [{ label: tripsLabel,    color: C.label }] : []),
-		...(durationLabel ? [{ label: durationLabel, color: C.label }] : []),
+		...(filesLabel ? [{ label: filesLabel, color: C.label }] : []),
+		...(tripsLabel ? [{ label: tripsLabel, color: C.label }] : []),
 	];
 
 	function renderStatLine(y: number): string {
@@ -238,34 +220,29 @@ export function generateStandardBanner(d: BannerData): string {
   <!-- pills -->
   ${pillEls.join('')}`;
 
-	// ── Waterfall layout (when per-resource timing data is available) ─────────
+	// ── Waterfall layout (when per-resource waterfall data is available) ─────
 	const resources = d.resources && d.resources.length > 0 ? d.resources : null;
 	if (resources) {
-		const STATS_H  = 18; // stats text row height
-		const ROW_H    = 13; // height for both round headers and resource rows
+		const STATS_H = 18; // stats text row height
+		const ROW_H   = 13; // height for both round headers and resource rows
 
-		const sorted = [...resources].sort((a, b) => a.startTime - b.startTime);
-		const t0     = sorted[0].startTime;
-		const tMax   = Math.max(...sorted.map((r) => r.responseEnd));
-		const span   = Math.max(1, tMax - t0);
-
-		// Group into rounds (gap > 5 ms = new round)
-		interface SvgRound { idx: number; offset: number; items: typeof sorted }
-		const rounds: SvgRound[] = [];
-		let cur: typeof sorted = [sorted[0]];
-		for (let i = 1; i < sorted.length; i++) {
-			if (sorted[i].startTime - sorted[i - 1].startTime > 5) {
-				rounds.push({ idx: rounds.length, offset: cur[0].startTime - t0, items: cur });
-				cur = [];
-			}
-			cur.push(sorted[i]);
+		// Group by pre-computed roundTrip; sort within each round by bytes DESC
+		interface SvgRound { idx: number; items: BannerResource[] }
+		const roundMap = new Map<number, BannerResource[]>();
+		for (const r of resources) {
+			if (!roundMap.has(r.roundTrip)) roundMap.set(r.roundTrip, []);
+			roundMap.get(r.roundTrip)!.push(r);
 		}
-		rounds.push({ idx: rounds.length, offset: cur[0].startTime - t0, items: cur });
+		const rounds: SvgRound[] = [...roundMap.entries()]
+			.sort(([a], [b]) => a - b)
+			.map(([idx, items]) => ({ idx, items: items.sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0)) }));
+
+		const maxBytes = Math.max(1, ...resources.map((r) => r.bytes ?? 0));
 
 		const totalRows = rounds.reduce((s, rd) => s + 1 + rd.items.length, 0);
 		const H = H1 + STATS_H + totalRows * ROW_H + 5;
 
-		// Layout: label + size col | bar track
+		// Layout: label col | size col | bar track
 		const LABEL_W = 130;
 		const SIZE_W  = 50;
 		const BAR_X   = PAD + LABEL_W + SIZE_W;
@@ -278,22 +255,17 @@ export function generateStandardBanner(d: BannerData): string {
 
 		for (const round of rounds) {
 			const rc = roundColors[Math.min(round.idx, roundColors.length - 1)];
-			const roundLabel  = `ROUND ${round.idx + 1}`;
-			const offsetLabel = `+${round.offset.toFixed(0)}\u202fms`;
-			// Use tw() (11px Verdana) scaled to 9px
-			const tw9 = (s: string) => Math.ceil(s.length * 5.3);
+			const roundLabel = `ROUND ${round.idx + 1}`;
 			rowEls.push(
-				`<text x="${PAD}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9" fill="${rc}" letter-spacing=".05em">${esc(roundLabel)}</text>` +
-				`<text x="${PAD + tw9(roundLabel) + 6}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9" fill="${C.label}">${esc(offsetLabel)}</text>`,
+				`<text x="${PAD}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9" fill="${rc}" letter-spacing=".05em">${esc(roundLabel)}</text>`,
 			);
 			ry += ROW_H;
 
 			for (let ri = 0; ri < round.items.length; ri++) {
 				const r    = round.items[ri];
-				const barL = ((r.startTime - t0) / span) * BAR_W;
-				const barW = Math.max(3, ((r.responseEnd - r.startTime) / span) * BAR_W);
+				const barW = Math.max(3, ((r.bytes ?? 0) / maxBytes) * BAR_W);
 				const name = waterfallFilename(r.url, 18);
-				const size = r.transferSize != null ? formatSize(r.transferSize) : '\u2013';
+				const size = r.bytes != null ? formatSize(r.bytes) : '\u2013';
 				const rowBg = ri % 2 === 1
 					? `<rect x="0" y="${ry}" width="${W}" height="${ROW_H}" fill="${C.panel}" fill-opacity=".5"/>`
 					: '';
@@ -301,7 +273,7 @@ export function generateStandardBanner(d: BannerData): string {
 					rowBg +
 					`<text x="${PAD}" y="${ry + ROW_H - 3}" font-family="${FONT}" font-size="9.5" fill="${C.value}">${esc(name)}</text>` +
 					`<text x="${BAR_X - 4}" y="${ry + ROW_H - 3}" text-anchor="end" font-family="${FONT}" font-size="9.5" fill="${C.label}">${esc(size)}</text>` +
-					`<rect x="${(BAR_X + barL).toFixed(1)}" y="${ry + 2}" width="${barW.toFixed(1)}" height="${ROW_H - 4}" rx="1.5" fill="${rc}" fill-opacity=".8"/>`,
+					`<rect x="${BAR_X.toFixed(1)}" y="${ry + 2}" width="${barW.toFixed(1)}" height="${ROW_H - 4}" rx="1.5" fill="${rc}" fill-opacity=".8"/>`,
 				);
 				ry += ROW_H;
 			}

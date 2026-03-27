@@ -199,8 +199,9 @@ export function App() {
 			const rawResources = await measurePackages(entries, selectedCdn, selectedFormat, formatPath, dr.externalDeps ?? []);
 
 			// 4. Report to /_record (fire-and-forget)
+			// Include cached resources (transferSize may be 0) as long as we know the size.
 			const annotated = rawResources.filter(
-				(r) => r.pkg && typeof r.transferSize === 'number' && r.transferSize > 0,
+				(r) => r.pkg && typeof r.decodedBodySize === 'number' && r.decodedBodySize > 0,
 			);
 			if (annotated.length) {
 				fetch('/_record', {
