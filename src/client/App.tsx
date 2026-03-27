@@ -2,7 +2,6 @@ import { createSignal, createEffect, on, Show, For, onMount, batch } from 'solid
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { WaterfallBanner } from './components/WaterfallBanner';
-import { BadgeGenerator } from './components/BadgeGenerator';
 import {
 	measurePackages,
 	getBrowserInfo,
@@ -373,19 +372,7 @@ export function App() {
 					</section>
 				</Show>
 
-				{/* ── Badge ───────────────────────────────────────────────── */}
-				<Show when={firstPkg()}>
-					<div classList={{ [styles.resultsDimmed]: isDirty() }}>
-						<BadgeGenerator
-							pkg={firstPkg}
-							version={() => measuredEntries()?.[0]?.version ?? ''}
-							cdn={cdn}
-							format={() => measuredFormat()}
-						/>
-					</div>
-				</Show>
-
-				</div>
+								</div>
 
 			<Footer />
 			</div>

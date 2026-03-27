@@ -93,9 +93,6 @@ function fmtBytes(n: number | null | undefined): string {
 	return `${(n / 1024).toFixed(1)}\u202fkB`;
 }
 
-function fmtMs(ms: number) {
-	return `${Math.round(ms)}\u202fms`;
-}
 
 function shortName(url: string, max = 26): string {
 	try {
@@ -130,25 +127,22 @@ function buildSvg(
 	const RH  = 14;
 
 	const sorted = [...rs].sort((a, b) => a.startTime - b.startTime);
-	const t0     = sorted[0].startTime;
-	const tEnd   = Math.max(...sorted.map(r => r.responseEnd));
-	const span   = Math.max(1, tEnd - t0);
 
 	// ── Group into rounds ────────────────────────────────────────────────────
-	interface Round { idx: number; offset: number; items: typeof sorted }
+	interface Round { idx: number; items: typeof sorted }
 	const rounds: Round[] = [];
 	let cur: typeof sorted = [sorted[0]];
 	for (let i = 1; i < sorted.length; i++) {
 		if (sorted[i].startTime - sorted[i - 1].startTime > 5) {
-			rounds.push({ idx: rounds.length, offset: cur[0].startTime - t0, items: cur });
+			rounds.push({ idx: rounds.length, items: cur });
 			cur = [];
 		}
 		cur.push(sorted[i]);
 	}
-	rounds.push({ idx: rounds.length, offset: cur[0].startTime - t0, items: cur });
+	rounds.push({ idx: rounds.length, items: cur });
 
-	const totalWire   = rs.reduce((s, r) => s + (r.transferSize   ?? 0), 0);
 	const totalParsed = rs.reduce((s, r) => s + (r.decodedBodySize ?? 0), 0);
+	const maxBytes    = Math.max(1, ...rs.map(r => r.decodedBodySize ?? 0));
 
 	// ── Layout ───────────────────────────────────────────────────────────────
 	const LABEL_W = 145;
@@ -180,10 +174,8 @@ function buildSvg(
 	// ── Stats line ───────────────────────────────────────────────────────────
 	const statItems = [
 		`${rs.length} file${rs.length !== 1 ? 's' : ''}`,
-		`${fmtBytes(totalWire)} wire`,
-		`${fmtBytes(totalParsed)} parsed`,
+		`${fmtBytes(totalParsed)} total`,
 		`${rounds.length} round trip${rounds.length !== 1 ? 's' : ''}`,
-		fmtMs(span) + ' total',
 	];
 	let sx = PAD;
 	const statEls: string[] = [];
@@ -207,19 +199,17 @@ function buildSvg(
 	for (const round of rounds) {
 		const rc = ROUND_COLORS[Math.min(round.idx, ROUND_COLORS.length - 1)];
 		const roundLabel  = `ROUND ${round.idx + 1}`;
-		const offsetLabel = `+${fmtMs(round.offset)}`;
 		rowEls.push(
-			`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" fill="${rc}" letter-spacing=".05em">${esc(roundLabel)}</text>` +
-			`<text x="${PAD + cw(roundLabel, 9) + 6}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" class="wb-label" fill="${D.label}">${esc(offsetLabel)}</text>`,
+			`<text x="${PAD}" y="${ry + RH - 3}" font-family="${FONT}" font-size="9" fill="${rc}" letter-spacing=".05em">${esc(roundLabel)}</text>`,
 		);
 		ry += RH;
 
 		for (let ri = 0; ri < round.items.length; ri++) {
 			const r    = round.items[ri];
-			const barL = ((r.startTime - t0) / span) * BAR_W;
-			const barW = Math.max(4, ((r.responseEnd - r.startTime) / span) * BAR_W);
+			const barL = 0;
+			const barW = Math.max(4, ((r.decodedBodySize ?? 0) / maxBytes) * BAR_W);
 			const name = shortName(r.url);
-			const size = fmtBytes(r.transferSize ?? r.decodedBodySize);
+			const size = fmtBytes(r.decodedBodySize ?? r.transferSize);
 			const altBg = ri % 2 === 1
 				? `<rect x="0" y="${ry}" width="${W}" height="${RH}" class="wb-panel" fill="${D.panel}" fill-opacity=".4"/>`
 				: '';
