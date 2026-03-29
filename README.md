@@ -25,8 +25,10 @@ Embeddable SVG that shows the package waterfall: file count, total size, and rou
 
 **Example:**
 
+![react-router-dom waterfall](https://bulk.frustrated.dev/_banner/standard/react-router-dom?cdn=esm.sh)
+
 ```markdown
-![react waterfall](https://bulk.frustrated.dev/_banner/standard/react)
+![react-router-dom waterfall](https://bulk.frustrated.dev/_banner/standard/react-router-dom?cdn=esm.sh)
 ```
 
 The banner auto-updates as new measurements are recorded. Cached at the edge and purged on write.
