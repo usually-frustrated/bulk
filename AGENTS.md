@@ -249,6 +249,25 @@ Light palette: `#ffffff` bg / `#f6f8fa` panel / `#d0d7de` border / `#57606a` lab
 
 CSS classes: `f-bg f-panel f-lbl f-val f-bd f-acc f-grn f-yel f-red` (fill) · `s-bd s-acc s-grn s-yel s-red` (stroke)
 
+### README banner example convention
+
+When adding a package example to the README, embed the live SVG image directly
+(GitHub renders it inline) followed by a copyable markdown snippet:
+
+```markdown
+![react-router-dom waterfall](https://bulk.frustrated.dev/_banner/standard/react-router-dom?cdn=esm.sh)
+
+\```markdown
+![react-router-dom waterfall](https://bulk.frustrated.dev/_banner/standard/react-router-dom?cdn=esm.sh)
+\```
+```
+
+- Place the raw `![alt](url)` *before* the fenced code block so the live image renders at the top
+- Use `?cdn=esm.sh` when showcasing a package that benefits from esm.sh's `?bundle` collapsing (e.g. packages with many transitive deps)
+- The banner auto-updates as new measurements are recorded (edge-cached, purged on write) — no manual refresh needed
+
+---
+
 ### banner.ts — DB-only, no live measurements
 
 **Architecture principle**: the banner is a *read-only* view of data already stored in D1.
@@ -417,6 +436,11 @@ bunx tsc --noEmit    # type-check (clean after bun install)
 
 ---
 
+## 🌿 branch naming convention
+Agent branches follow the pattern `claude/<kebab-description>-<5charID>` (e.g. `claude/add-svg-banner-readme-xyFTH`).
+
+---
+
 ## ⚠ known gaps / gotchas
 - badge endpoint measures **root CDN response** (not bundled/treeshaken)
 - Skypack listed in providers.ts but NOT in CDNS (cdn.ts) — badge only, no bundle analysis
@@ -427,3 +451,6 @@ bunx tsc --noEmit    # type-check (clean after bun install)
 - `tsc --noEmit` always emits one pre-existing error: "Cannot find type definition file for 'bun'" — ignore it; it does not block builds
 - `?export=` URL param is no longer synced immediately on chip click (chips were removed); export is now a `<select>` driven by discover data
 - **Export dropdown SolidJS quirk:** `<select value={selectedExport()}>` does NOT re-apply its value when child `<option>` elements are re-rendered by `<For>`. The fix is to skip calling `setDiscoverData(dr)` when data for the same package is already loaded — keeping the `<For>` stable and the select selection intact.
+- **README is stale in two places:**
+  - Badge API section still shows `/:provider/:package` as a valid route — it is not; CDN is `?cdn=` param only
+  - Deployment section shows `npm install` / `npx wrangler` — use `bun install` / `bunx wrangler` instead (per cmds section)
