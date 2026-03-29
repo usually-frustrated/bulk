@@ -40,11 +40,10 @@ The banner auto-updates as new measurements are recorded. Cached at the edge and
 Small size badge (still available as a public API endpoint):
 
 ```
-/:package
-/:provider/:package
+/:package[@version][?cdn=jsdelivr|unpkg|esm.sh]
 ```
 
-**Providers:** jsdelivr (default), unpkg, esm.sh
+**CDN:** jsdelivr (default), unpkg, esm.sh — selected via `?cdn=` query param
 
 ---
 
@@ -63,7 +62,7 @@ Small size badge (still available as a public API endpoint):
 Runs on Cloudflare Workers + D1.
 
 ```bash
-npm install
-npx wrangler deploy
-npx wrangler d1 migrations apply bulk-bundle --remote
+bun install
+bunx wrangler deploy
+bunx wrangler d1 migrations apply bulk-bundle --remote
 ```
