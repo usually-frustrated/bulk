@@ -10,7 +10,7 @@
 
 ## What it does
 
-Measures the real browser load cost of importing a package from a CDN — how many files are fetched, how many round trips are needed, and the total decoded size. Unlike bundlephobia (which shows minified+gzipped npm sizes), this runs an actual browser load and captures the resource waterfall.
+Measures the real browser load cost of importing a package from a CDN — how many files are fetched, how many round trips are needed, and the total decoded size. Runs an actual browser load and captures the resource waterfall.
 
 ---
 

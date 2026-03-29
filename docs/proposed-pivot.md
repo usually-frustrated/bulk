@@ -429,7 +429,7 @@ Everything we discovered in this session points to one underlying problem: **run
 
 Build-time optimization is well-understood and well-tooled:
 - webpack-bundle-analyzer, vite visualizer, rollup-plugin-visualizer → show what's in your bundle
-- BundlePhobia → shows what adding a package costs your bundled output
+- tools like bundlephobia → show what adding a package costs your bundled output
 - tree-shaking, code splitting, dynamic imports → all build-time concerns
 
 **Runtime optimization has no equivalent tooling.** The questions that matter at runtime:
@@ -468,8 +468,6 @@ Badge: compressed summary of that data, honest and embeddable.
 History chart: how that cost has changed across versions.
 Crowd-sourced data: measurements improve with every user, across browsers and network conditions.
 
-Differentiated from:
-- **BundlePhobia** — answers bundler cost (build-time). bulk answers CDN cost (runtime).
-- **Badge services** — show one number from a HEAD request. bulk shows what actually loads.
-- **CDN docs** — explain their own format. bulk compares across CDNs and explains the differences.
-- **DevTools Network tab** — shows one session. bulk aggregates, historicises, and makes it shareable.
+---
+
+*Inspired by bundlephobia, packagephobia, and similar tools that made package cost visible at build time. bulk asks the same question at runtime.*

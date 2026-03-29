@@ -81,18 +81,21 @@ fetches run concurrently.
 
 ## What we measure vs. what Bundlephobia measures
 
+These are different questions, not competing answers.
+
 | | Our endpoint | Bundlephobia |
 |---|---|---|
+| Question | What does the browser download at runtime? | What does this add to my bundled app? |
 | Source | esm.sh CDN output | Locally bundled (webpack) |
 | Tree-shaking | None (full module) | Yes (named export only) |
 | Peer deps | Excluded by esm.sh | Excluded |
-| Accuracy | "what esm.sh ships" | "what lands in your bundle" |
+| Output | "what esm.sh ships to a browser" | "what lands in your bundle" |
 | Infrastructure | Worker + KV | Dedicated bundler service |
 
-The numbers will differ. Ours are a reasonable proxy for "how big is this
-module as shipped by the most popular ESM CDN", which is useful and honest.
-If we later want true bundle-cost numbers, the right time to build that
-infrastructure is when it becomes a core product feature, not a supporting graph.
+The numbers will differ because they measure different things. Ours answer the
+runtime cost question; Bundlephobia answers the build-time cost question. Both
+numbers are useful to a developer — they just apply at different points in the
+workflow.
 
 ---
 
