@@ -436,6 +436,11 @@ bunx tsc --noEmit    # type-check (clean after bun install)
 
 ---
 
+## 🌿 branch naming convention
+Agent branches follow the pattern `claude/<kebab-description>-<5charID>` (e.g. `claude/add-svg-banner-readme-xyFTH`).
+
+---
+
 ## ⚠ known gaps / gotchas
 - badge endpoint measures **root CDN response** (not bundled/treeshaken)
 - Skypack listed in providers.ts but NOT in CDNS (cdn.ts) — badge only, no bundle analysis
@@ -446,3 +451,6 @@ bunx tsc --noEmit    # type-check (clean after bun install)
 - `tsc --noEmit` always emits one pre-existing error: "Cannot find type definition file for 'bun'" — ignore it; it does not block builds
 - `?export=` URL param is no longer synced immediately on chip click (chips were removed); export is now a `<select>` driven by discover data
 - **Export dropdown SolidJS quirk:** `<select value={selectedExport()}>` does NOT re-apply its value when child `<option>` elements are re-rendered by `<For>`. The fix is to skip calling `setDiscoverData(dr)` when data for the same package is already loaded — keeping the `<For>` stable and the select selection intact.
+- **README is stale in two places:**
+  - Badge API section still shows `/:provider/:package` as a valid route — it is not; CDN is `?cdn=` param only
+  - Deployment section shows `npm install` / `npx wrangler` — use `bun install` / `bunx wrangler` instead (per cmds section)
