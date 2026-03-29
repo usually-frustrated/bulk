@@ -468,8 +468,8 @@ Badge: compressed summary of that data, honest and embeddable.
 History chart: how that cost has changed across versions.
 Crowd-sourced data: measurements improve with every user, across browsers and network conditions.
 
-Differentiated from:
-- **BundlePhobia** — answers bundler cost (build-time). bulk answers CDN cost (runtime).
+Not a replacement for:
+- **BundlePhobia** — measures what a package costs in a bundled app (build-time, tree-shaken). That's a different question from what bulk answers. Use both.
 - **Badge services** — show one number from a HEAD request. bulk shows what actually loads.
 - **CDN docs** — explain their own format. bulk compares across CDNs and explains the differences.
 - **DevTools Network tab** — shows one session. bulk aggregates, historicises, and makes it shareable.
